@@ -2,6 +2,20 @@
 
 This file provides guidance to AI coding assistants when working with code in this repository.
 
+## Cognitive Lenses — Read These First
+
+Before reading any code or answering any question, adopt all seven lenses simultaneously:
+
+1. **Hummingbot Lens** — Every endpoint exists to serve Hummingbot strategies. Always ask: "What trading strategy would call this?" and "How does the response shape affect strategy logic?"
+2. **Blockchain Lens** — Gas costs, nonce management, transaction finality, and RPC reliability are real constraints. BigNumber precision and unit conversions are correctness-critical, not cosmetic.
+3. **System Architect Lens** — Singleton instances, route registration, config schema validation, and the chain/connector separation of concerns must be maintained. Adding a new chain or connector should follow the established pattern exactly.
+4. **Bitcoin Lens** (skepticism) — Assume any new on-chain integration has edge cases, stale documentation, or ABI drift. Verify contract addresses against block explorers. Test with small amounts first. ABIs should be stored as JSON files, not inline arrays.
+5. **Jest Lens** — Every exported function needs a unit test. Every route needs an integration test. Mocks must mirror real response shapes. Never mock away the logic under test.
+6. **QA Lens** — Think about what happens with zero amounts, max uint256, wrong token ordering, expired deadlines, slippage exhaustion, and network timeouts. These aren't edge cases — they're common production conditions.
+7. **Security Lens** — Private keys only appear in encrypted wallet storage. API endpoints enforce schema validation. Sensitive config fields (API keys, passphrases) are never logged.
+
+---
+
 ## Build & Command Reference
 - Build: `pnpm build`
 - Start server: `pnpm start --passphrase=<PASSPHRASE>`
@@ -112,6 +126,41 @@ This file provides guidance to AI coding assistants when working with code in th
 - Prefer async/await over promise chains
 - Follow singleton pattern for chains/connectors
 - RPC provider services should gracefully fall back to standard RPC on failure
+
+## Key Patterns
+
+### Wallet File Format
+Wallets are stored as JSON files at `conf/wallets/{chain}/{address}.json` with fields: `{ address, encryptedPrivateKey, network }`. The `network` field disambiguates wallets on multi-network chains (e.g., `avalanche` vs `mainnet` for `chain: ethereum`).
+
+### chainNetwork Parsing in Routes
+All connector and chain routes accept both `chain` and `network` fields. The `chain` identifies the base blockchain (`ethereum`, `solana`) and `network` identifies the specific deployment (`mainnet`, `avalanche`, `mainnet-beta`). Always extract both from the request body and pass to `getInstance(network)`.
+
+```typescript
+const { chain, network } = request.body;
+const chainInstance = await getInitializedChain<Ethereum>(chain, network);
+```
+
+### Response Extension Rules
+- Never drop fields from existing response schemas — Hummingbot strategies depend on field presence
+- Add optional fields with `?` or provide defaults to preserve backward compatibility
+- Chain-specific fields (e.g., `binStep` for LFJ, `tickSpacing` for Uniswap V3) should be added alongside the standard fields, not in place of them
+
+### Route File Locations
+Routes live in `src/connectors/{connector}/{type}-routes/{operation}.ts` where `type` is `router`, `amm`, or `clmm`. Each route file exports a single async handler function registered in `src/connectors/{connector}/{connector}.routes.ts`.
+
+### BigNumber / BigInt Safety
+Never use `Math.floor(amount * Math.pow(10, decimals))` — this produces scientific notation strings like `"1.5e+21"` for 18-decimal tokens, causing `BigNumber.from()` to throw. Always use:
+```typescript
+// ✅ Safe — uses ethers string parsing
+utils.parseUnits(amount.toFixed(decimals), decimals)
+
+// ❌ Dangerous — floats overflow for large amounts
+BigNumber.from(Math.floor(amount * 1e18).toString())
+```
+Similarly, never call `.toNumber()` on a BigNumber representing a raw token amount — it silently overflows for values above `Number.MAX_SAFE_INTEGER`. Use `utils.formatUnits(rawAmount, decimals)` instead.
+
+### ABI Storage
+Store contract ABIs as JSON files in `src/connectors/{connector}/abis/*.json`, not as inline TypeScript arrays. JSON files are diffable, can be updated without TypeScript changes, and match the separation-of-concerns expected by the Bitcoin Lens.
 
 ## Adding New Features
 - Follow existing patterns in chains/connectors directories
@@ -224,6 +273,8 @@ Gateway supports optimized RPC providers for enhanced performance:
 | Raydium | Solana | ❌ | ✅ | ✅ |
 | Uniswap | Ethereum/EVM | ✅ | ✅ | ✅ |
 | 0x | Ethereum/EVM | ✅ | ❌ | ❌ |
+| PancakeSwap | Ethereum/BSC/EVM | ✅ | ✅ | ✅ |
+| LFJ (Trader Joe) | Avalanche | ✅ | ❌ | ✅ |
 
 ## Environment Variables
 - `GATEWAY_PASSPHRASE`: Set passphrase for wallet encryption

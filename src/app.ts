@@ -18,6 +18,7 @@ import { solanaRoutes } from './chains/solana/solana.routes';
 import { configRoutes } from './config/config.routes';
 import { register0xRoutes } from './connectors/0x/0x.routes';
 import { jupiterRoutes } from './connectors/jupiter/jupiter.routes';
+import { lfjRoutes } from './connectors/lfj/lfj.routes';
 import { meteoraRoutes } from './connectors/meteora/meteora.routes';
 import { orcaRoutes } from './connectors/orca/orca.routes';
 import { pancakeswapRoutes } from './connectors/pancakeswap/pancakeswap.routes';
@@ -107,6 +108,10 @@ const swaggerOptions = {
       {
         name: '/connector/pancakeswap',
         description: 'PancakeSwap EVM connector endpoints',
+      },
+      {
+        name: '/connector/lfj',
+        description: 'LFJ (Trader Joe) Liquidity Book connector endpoints for Avalanche',
       },
     ],
     components: {
@@ -277,6 +282,10 @@ const configureGatewayServer = () => {
 
     // PancakeSwap Solana routes
     app.register(pancakeswapSolRoutes, { prefix: '/connectors/pancakeswap-sol' });
+
+    // LFJ (Trader Joe) Liquidity Book routes — Avalanche
+    app.register(lfjRoutes.router, { prefix: '/connectors/lfj/router' });
+    app.register(lfjRoutes.clmm, { prefix: '/connectors/lfj/clmm' });
   };
 
   // Register routes on main server

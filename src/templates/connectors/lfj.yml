@@ -1,0 +1,3 @@
+# Global settings for LFJ (Trader Joe / Liquidity Book)
+slippagePct: 2
+maximumHops: 3

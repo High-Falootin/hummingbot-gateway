@@ -1,0 +1,57 @@
+[
+  {
+    "connector": "uniswap",
+    "type": "clmm",
+    "network": "avalanche",
+    "baseSymbol": "WAVAX",
+    "quoteSymbol": "USDC",
+    "address": "0xa6CCb9483E3E7a737E3a4F5B72a1Ce51838ba122",
+    "baseTokenAddress": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+    "quoteTokenAddress": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+    "feePct": 0.3
+  },
+  {
+    "connector": "uniswap",
+    "type": "clmm",
+    "network": "avalanche",
+    "baseSymbol": "WETH.e",
+    "quoteSymbol": "USDC",
+    "address": "0x5B9b63C57e8E4c74888A4572c02d7b2F3Bc7Bf0D",
+    "baseTokenAddress": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+    "quoteTokenAddress": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+    "feePct": 0.05
+  },
+  {
+    "connector": "lfj",
+    "type": "clmm",
+    "network": "avalanche",
+    "baseSymbol": "WAVAX",
+    "quoteSymbol": "USDC",
+    "address": "0xD446eb1660F766d533BeCeEf890Df7A69d26c7d1",
+    "baseTokenAddress": "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
+    "quoteTokenAddress": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+    "feePct": 0.2
+  },
+  {
+    "connector": "lfj",
+    "type": "clmm",
+    "network": "avalanche",
+    "baseSymbol": "WETH.e",
+    "quoteSymbol": "USDC",
+    "address": "0x1901011a39B11271578a1283D620373aBeD66faA",
+    "baseTokenAddress": "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",
+    "quoteTokenAddress": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+    "feePct": 0.15
+  },
+  {
+    "connector": "lfj",
+    "type": "clmm",
+    "network": "avalanche",
+    "baseSymbol": "WBTC.e",
+    "quoteSymbol": "USDC",
+    "address": "0x4224f6F4C9280509724Db2DbAc8B3D6b28c94501",
+    "baseTokenAddress": "0x50b7545627a5162F82A992c33b87aDc75187B218",
+    "quoteTokenAddress": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+    "feePct": 0.15
+  }
+]

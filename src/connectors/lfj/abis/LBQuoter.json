@@ -1,0 +1,54 @@
+[
+  {
+    "inputs": [
+      { "internalType": "address", "name": "route0", "type": "address" },
+      { "internalType": "address", "name": "route1", "type": "address" },
+      { "internalType": "uint128", "name": "amountIn", "type": "uint128" }
+    ],
+    "name": "findBestPathFromAmountIn",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address[]", "name": "route", "type": "address[]" },
+          { "internalType": "address[]", "name": "pairs", "type": "address[]" },
+          { "internalType": "uint256[]", "name": "binSteps", "type": "uint256[]" },
+          { "internalType": "uint8[]", "name": "versions", "type": "uint8[]" },
+          { "internalType": "uint128[]", "name": "amounts", "type": "uint128[]" },
+          { "internalType": "uint128[]", "name": "virtualAmountsWithoutSlippage", "type": "uint128[]" },
+          { "internalType": "uint128[]", "name": "fees", "type": "uint128[]" }
+        ],
+        "internalType": "struct LBQuoter.Quote",
+        "name": "quote",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "route0", "type": "address" },
+      { "internalType": "address", "name": "route1", "type": "address" },
+      { "internalType": "uint128", "name": "amountOut", "type": "uint128" }
+    ],
+    "name": "findBestPathFromAmountOut",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "address[]", "name": "route", "type": "address[]" },
+          { "internalType": "address[]", "name": "pairs", "type": "address[]" },
+          { "internalType": "uint256[]", "name": "binSteps", "type": "uint256[]" },
+          { "internalType": "uint8[]", "name": "versions", "type": "uint8[]" },
+          { "internalType": "uint128[]", "name": "amounts", "type": "uint128[]" },
+          { "internalType": "uint128[]", "name": "virtualAmountsWithoutSlippage", "type": "uint128[]" },
+          { "internalType": "uint128[]", "name": "fees", "type": "uint128[]" }
+        ],
+        "internalType": "struct LBQuoter.Quote",
+        "name": "quote",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
