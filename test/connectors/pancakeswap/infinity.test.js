@@ -7,8 +7,9 @@
  * Architecture under test:
  *   - Pools identified by bytes32 PoolId (64 hex chars), not contract addresses
  *   - PoolId = keccak256(PoolKey{ currency0, currency1, fee, tickSpacing, hooks })
- *   - Fee in ppm: 500=0.05%, 3000=0.3%, 10000=1%
+ *   - Fee in ppm: 100=0.01%, 500=0.05%, 3000=0.3%, 10000=1%
  *   - BSC mainnet — Infinity PoolManager: 0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b
+ *   - Reference pool: USDT/BILL 0.01% (0x673dbd89...)
  *
  * Pattern: axios mock layer (no live RPC). Tests validate:
  *   1. Response schema shape (all required fields present, correct types)
@@ -34,12 +35,12 @@ const PROTOCOL = 'infinity';
 const BASE_URL = `http://localhost:15888/connectors/${CONNECTOR}/${PROTOCOL}`;
 const NETWORK = 'bsc';
 
-// Real BSC Infinity pool: USDT/WBNB 0.3% fee
+// Real BSC Infinity pool: USDT/BILL 0.01% fee
 const TEST_POOL_ID = '0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20';
 const CURRENCY0 = '0x55d398326f99059fF775485246999027B3197955'; // USDT
-const CURRENCY1 = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'; // WBNB
-const FEE_PPM = 3000; // 0.3%
-const TICK_SPACING = 60;
+const CURRENCY1 = '0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5'; // BILL
+const FEE_PPM = 100; // 0.01%
+const TICK_SPACING = 1;
 const HOOKS_ZERO = '0x0000000000000000000000000000000000000000';
 const TEST_WALLET = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const TEST_TOKEN_ID = '12345';
@@ -158,7 +159,7 @@ function validateCollectFeesResponse(r) {
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
-describe('PancakeSwap Infinity CLMM Tests (BSC Network)', () => {
+describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
   beforeEach(() => {
     axios.get.mockClear();
     axios.post.mockClear();
@@ -201,8 +202,8 @@ describe('PancakeSwap Infinity CLMM Tests (BSC Network)', () => {
       const response = await axios.get(`${BASE_URL}/pool-info`, {
         params: { network: NETWORK, poolId: TEST_POOL_ID, currency0: CURRENCY0, currency1: CURRENCY1, fee: FEE_PPM },
       });
-      expect(response.data.fee).toBe(3000);
-      expect(response.data.feePct).toBeCloseTo(0.003, 6);
+      expect(response.data.fee).toBe(100);
+      expect(response.data.feePct).toBeCloseTo(0.0001, 7);
     });
 
     test('price is a positive finite number', async () => {
@@ -318,10 +319,10 @@ describe('PancakeSwap Infinity CLMM Tests (BSC Network)', () => {
       fee: FEE_PPM,
       tickSpacing: TICK_SPACING,
       hooks: HOOKS_ZERO,
-      lowerPrice: 0.0015,
-      upperPrice: 0.0018,
+      lowerPrice: 7.5,
+      upperPrice: 9.5,
       amount0Desired: 100.0,
-      amount1Desired: 0.164,
+      amount1Desired: 839.0,
       slippagePct: 0.5,
     });
 
@@ -426,7 +427,7 @@ describe('PancakeSwap Infinity CLMM Tests (BSC Network)', () => {
       walletAddress: TEST_WALLET,
       positionTokenId: TEST_TOKEN_ID,
       amount0Desired: 50.0,
-      amount1Desired: 0.082,
+      amount1Desired: 419.5,
       slippagePct: 0.5,
     });
 
@@ -693,16 +694,16 @@ describe('PancakeSwap Infinity CLMM Tests (BSC Network)', () => {
       expect(100 / 1_000_000).toBeCloseTo(0.0001, 7);
     });
 
-    test('tickLower must be divisible by tickSpacing (60)', () => {
-      const tickSpacing = 60;
-      const tick = -62486;
+    test('tickLower must be divisible by tickSpacing (1)', () => {
+      const tickSpacing = 1;
+      const tick = 21271;
       const rounded = Math.floor(tick / tickSpacing) * tickSpacing;
       expect(Math.abs(rounded % tickSpacing)).toBe(0);
     });
 
-    test('tickUpper must be divisible by tickSpacing (60)', () => {
-      const tickSpacing = 60;
-      const tick = -62486;
+    test('tickUpper must be divisible by tickSpacing (1)', () => {
+      const tickSpacing = 1;
+      const tick = 21271;
       const rounded = Math.ceil(tick / tickSpacing) * tickSpacing;
       expect(Math.abs(rounded % tickSpacing)).toBe(0);
     });

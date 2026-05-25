@@ -5,12 +5,12 @@
     "positionTokenId": "12345",
     "poolId": "0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20",
     "currency0": "0x55d398326f99059fF775485246999027B3197955",
-    "currency1": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
-    "tickLower": -63000,
-    "tickUpper": -62000,
-    "fee": 3000,
-    "feePct": 0.003,
+    "currency1": "0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5",
+    "tickLower": 20150,
+    "tickUpper": 22510,
+    "fee": 100,
+    "feePct": 0.0001,
     "amount0Desired": 100.0,
-    "amount1Desired": 0.164
+    "amount1Desired": 839.0
   }
 }
