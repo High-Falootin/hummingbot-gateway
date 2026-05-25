@@ -22,7 +22,13 @@ export const listPoolsRoute: FastifyPluginAsync = async (fastify) => {
       const poolService = PoolService.getInstance();
 
       try {
-        const pools = await poolService.listPools(chain, network, connector, type, search);
+        const pools = await poolService.listPools(
+          chain,
+          network,
+          connector,
+          type as 'amm' | 'clmm' | 'infinity' | undefined,
+          search,
+        );
         return pools;
       } catch (error) {
         throw fastify.httpErrors.badRequest(error.message);

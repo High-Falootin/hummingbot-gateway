@@ -5,6 +5,7 @@ import { addPoolRoute } from './routes/addPool';
 import { findPoolsRoute } from './routes/findPools';
 import { getPoolRoute } from './routes/getPool';
 import { listPoolsRoute } from './routes/listPools';
+import { registerInfinityPoolRoute } from './routes/registerInfinityPool';
 import { removePoolRoute } from './routes/removePool';
 import { savePoolRoute } from './routes/save';
 
@@ -18,4 +19,6 @@ export const poolRoutes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(addPoolRoute);
   await fastify.register(savePoolRoute);
   await fastify.register(removePoolRoute);
+  // Infinity-specific registration (PancakeSwap Infinity / V4-style singleton)
+  await fastify.register(registerInfinityPoolRoute);
 };

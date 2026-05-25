@@ -586,4 +586,223 @@ describe('Pool Routes Tests', () => {
       expect(JSON.parse(response.payload).message).toContain('Failed to fetch pools from GeckoTerminal');
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /infinity — PancakeSwap Infinity pool registration
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('POST /infinity', () => {
+    const VALID_POOL_ID = '0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20';
+    const USDT_BSC = '0x55d398326f99059fF775485246999027B3197955';
+    const BILL_BSC = '0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5';
+    const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+
+    const validBody = {
+      chain: 'ethereum',
+      network: 'bsc',
+      connector: 'pancakeswap',
+      poolId: VALID_POOL_ID,
+      currency0: USDT_BSC,
+      currency1: BILL_BSC,
+      fee: 100,
+      tickSpacing: 1,
+      hooks: ZERO_ADDR,
+      baseSymbol: 'USDT',
+      quoteSymbol: 'BILL',
+    };
+
+    // ── Happy path ──────────────────────────────────────────────────────────
+
+    it('should register an Infinity pool and return 200', async () => {
+      mockPoolService.addPool.mockResolvedValue(undefined);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: validBody,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const result = JSON.parse(response.payload);
+      expect(typeof result.message).toBe('string');
+      expect(result.message).toContain('USDT/BILL');
+      expect(result.message).toContain(VALID_POOL_ID);
+    });
+
+    it('should call addPool with type=infinity and all PoolKey fields', async () => {
+      mockPoolService.addPool.mockResolvedValue(undefined);
+
+      await fastify.inject({ method: 'POST', url: '/infinity', payload: validBody });
+
+      expect(mockPoolService.addPool).toHaveBeenCalledWith(
+        'ethereum',
+        'bsc',
+        expect.objectContaining({
+          type: 'infinity',
+          connector: 'pancakeswap',
+          network: 'bsc',
+          poolId: VALID_POOL_ID,
+          address: VALID_POOL_ID,
+          fee: 100,
+          tickSpacing: 1,
+          hooks: ZERO_ADDR,
+          baseSymbol: 'USDT',
+          quoteSymbol: 'BILL',
+          baseTokenAddress: USDT_BSC,
+          quoteTokenAddress: BILL_BSC,
+          feePct: 0.01, // 100 ppm / 10000
+        }),
+      );
+    });
+
+    it('feePct is correctly derived from fee ppm', async () => {
+      mockPoolService.addPool.mockResolvedValue(undefined);
+      const body500 = { ...validBody, fee: 500 };
+      await fastify.inject({ method: 'POST', url: '/infinity', payload: body500 });
+      expect(mockPoolService.addPool).toHaveBeenCalledWith(
+        'ethereum',
+        'bsc',
+        expect.objectContaining({ feePct: 0.05 }),
+      );
+    });
+
+    // ── Network/connector guards ────────────────────────────────────────────
+
+    it('should return 400 for non-BSC network', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: { ...validBody, network: 'mainnet' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.payload).message).toContain('BSC');
+    });
+
+    it('should return 400 for non-pancakeswap connector', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: { ...validBody, connector: 'uniswap' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.payload).message).toContain('pancakeswap');
+    });
+
+    // ── Fee tier validation ─────────────────────────────────────────────────
+
+    it('should return 400 for invalid fee tier', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: { ...validBody, fee: 3500 }, // not a valid Infinity tier
+      });
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.payload).message).toMatch(/fee tier|allowed values/);
+    });
+
+    it('should accept all valid Infinity fee tiers', async () => {
+      mockPoolService.addPool.mockResolvedValue(undefined);
+      for (const fee of [100, 500, 2500, 3000, 10000]) {
+        mockPoolService.addPool.mockClear();
+        const response = await fastify.inject({
+          method: 'POST',
+          url: '/infinity',
+          payload: { ...validBody, fee },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(mockPoolService.addPool).toHaveBeenCalledWith('ethereum', 'bsc', expect.objectContaining({ fee }));
+      }
+    });
+
+    // ── Token ordering guard ────────────────────────────────────────────────
+
+    it('should return 400 when currency0 >= currency1', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        // swap USDT and BILL so currency0 > currency1 lexicographically
+        payload: { ...validBody, currency0: BILL_BSC, currency1: USDT_BSC },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.payload).message).toContain('currency0');
+    });
+
+    // ── Schema validation (TypeBox 400) ────────────────────────────────────
+
+    it('should return 400 when poolId is a 40-char EVM address (not bytes32)', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        // 40-char address instead of the required 64-char PoolId
+        payload: { ...validBody, poolId: USDT_BSC },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should return 400 when currency0 is not a valid EVM address', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: { ...validBody, currency0: 'not-an-address' },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should return 400 when hooks is not a valid EVM address', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: { ...validBody, hooks: 'bad-hooks' },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('should return 400 when required fields are missing', async () => {
+      const { fee: _fee, ...bodyWithoutFee } = validBody;
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: bodyWithoutFee,
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    // ── Duplicate pool ──────────────────────────────────────────────────────
+
+    it('should return 400 when pool already exists', async () => {
+      mockPoolService.addPool.mockRejectedValue(new Error(`Pool with address ${VALID_POOL_ID} already exists`));
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: validBody,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(JSON.parse(response.payload).message).toContain('already exists');
+    });
+
+    // ── Service error ───────────────────────────────────────────────────────
+
+    it('should return 500 on unexpected service error', async () => {
+      mockPoolService.addPool.mockRejectedValue(new Error('unexpected db failure'));
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/infinity',
+        payload: validBody,
+      });
+      expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.payload).message).toContain('Failed to register Infinity pool');
+    });
+
+    // ── DDD boundary: infinity type stored correctly ──────────────────────────
+
+    it('address field must equal poolId (for backwards-compat lookup-by-address)', async () => {
+      mockPoolService.addPool.mockResolvedValue(undefined);
+      await fastify.inject({ method: 'POST', url: '/infinity', payload: validBody });
+      const call = mockPoolService.addPool.mock.calls[0];
+      const pool = call[2];
+      expect(pool.address).toBe(pool.poolId);
+      expect(pool.address).toBe(VALID_POOL_ID);
+    });
+  });
 });

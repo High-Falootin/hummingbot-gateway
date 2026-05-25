@@ -21,8 +21,8 @@ export const PoolListRequestSchema = Type.Object({
   type: Type.Optional(
     Type.String({
       description: 'Optional: filter by pool type',
-      examples: ['clmm', 'amm'],
-      enum: ['clmm', 'amm'],
+      examples: ['clmm', 'amm', 'infinity'],
+      enum: ['clmm', 'amm', 'infinity'],
     }),
   ),
   search: Type.Optional(
@@ -40,8 +40,8 @@ export const PoolTemplateSchema = Type.Object({
   }),
   type: Type.String({
     description: 'Pool type',
-    examples: ['clmm', 'amm'],
-    enum: ['clmm', 'amm'],
+    examples: ['clmm', 'amm', 'infinity'],
+    enum: ['clmm', 'amm', 'infinity'],
   }),
   network: Type.String(),
   baseSymbol: Type.String(),
@@ -50,6 +50,19 @@ export const PoolTemplateSchema = Type.Object({
   quoteTokenAddress: Type.String(),
   feePct: Type.Number(),
   address: Type.String(),
+  // Infinity-only fields
+  poolId: Type.Optional(
+    Type.String({ description: 'bytes32 PoolId (Infinity pools only)', pattern: '^0x[0-9a-fA-F]{64}$' }),
+  ),
+  fee: Type.Optional(
+    Type.Number({ description: 'Fee in ppm (Infinity pools only)', examples: [100, 500, 2500, 3000, 10000] }),
+  ),
+  tickSpacing: Type.Optional(
+    Type.Number({ description: 'Tick spacing (Infinity pools only)', examples: [1, 10, 50, 60, 200] }),
+  ),
+  hooks: Type.Optional(
+    Type.String({ description: 'Hooks contract address (Infinity pools only)', pattern: '^0x[0-9a-fA-F]{40}$' }),
+  ),
 });
 
 export type PoolTemplate = typeof PoolTemplateSchema.static;
@@ -78,7 +91,7 @@ export const PoolAddRequestSchema = Type.Object({
     default: 'mainnet-beta',
   }),
   address: Type.String({
-    description: 'Pool contract address',
+    description: 'Pool contract address (40-char EVM address or 32-44 char Solana base58 address)',
   }),
   baseSymbol: Type.Optional(
     Type.String({
@@ -123,8 +136,8 @@ export const GetPoolRequestSchema = Type.Object({
   }),
   type: Type.String({
     description: 'Pool type',
-    examples: ['amm', 'clmm'],
-    enum: ['amm', 'clmm'],
+    examples: ['amm', 'clmm', 'infinity'],
+    enum: ['amm', 'clmm', 'infinity'],
   }),
   connector: Type.Optional(
     Type.String({
@@ -158,9 +171,10 @@ export const FindPoolsQuerySchema = Type.Object({
   ),
   type: Type.Optional(
     Type.String({
-      description: 'Filter by pool type: clmm (v3-style concentrated liquidity) or amm (v2-style)',
-      examples: ['clmm', 'amm'],
-      enum: ['clmm', 'amm'],
+      description:
+        'Filter by pool type: clmm (v3-style concentrated liquidity), amm (v2-style), or infinity (V4-style singleton)',
+      examples: ['clmm', 'amm', 'infinity'],
+      enum: ['clmm', 'amm', 'infinity'],
       default: 'clmm',
     }),
   ),
@@ -192,3 +206,68 @@ export type FindPoolsQuery = typeof FindPoolsQuerySchema.static;
 export const FindPoolsResponseSchema = Type.Array(PoolInfoSchema);
 
 export type FindPoolsResponse = typeof FindPoolsResponseSchema.static;
+
+// ──────────────────────────────────────────────
+// PancakeSwap Infinity pool registration schemas
+// ──────────────────────────────────────────────
+
+/**
+ * Request body for POST /pools/infinity
+ * Registers a PancakeSwap Infinity (V4-style singleton) pool by its full PoolKey.
+ * Unlike V3 CLMM pools, Infinity pools are identified by a bytes32 PoolId derived
+ * from keccak256(abi.encode(PoolKey)) — NOT a contract address.
+ */
+export const RegisterInfinityPoolRequestSchema = Type.Object({
+  chain: Type.String({
+    description: 'Blockchain chain — must be "ethereum" (BSC is EVM-compatible)',
+    examples: ['ethereum'],
+  }),
+  network: Type.String({
+    description: 'Network — must be "bsc" (Infinity contracts only exist on BSC)',
+    examples: ['bsc'],
+  }),
+  connector: Type.String({
+    description: 'Connector — must be "pancakeswap"',
+    examples: ['pancakeswap'],
+  }),
+  poolId: Type.String({
+    description: 'bytes32 PoolId = keccak256(abi.encode(PoolKey)). 0x + 64 hex chars.',
+    pattern: '^0x[0-9a-fA-F]{64}$',
+    examples: ['0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20'],
+  }),
+  currency0: Type.String({
+    description: 'Token0 EVM address — must be lexicographically less than currency1',
+    pattern: '^0x[0-9a-fA-F]{40}$',
+    examples: ['0x55d398326f99059fF775485246999027B3197955'],
+  }),
+  currency1: Type.String({
+    description: 'Token1 EVM address — must be lexicographically greater than currency0',
+    pattern: '^0x[0-9a-fA-F]{40}$',
+    examples: ['0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5'],
+  }),
+  fee: Type.Number({
+    description: 'Fee in ppm: 100=0.01%, 500=0.05%, 2500=0.25%, 3000=0.3%, 10000=1%',
+    enum: [100, 500, 2500, 3000, 10000],
+    examples: [100],
+  }),
+  tickSpacing: Type.Number({
+    description: 'Tick spacing for the fee tier',
+    minimum: 1,
+    examples: [1, 10, 50, 60, 200],
+  }),
+  hooks: Type.String({
+    description: 'Hooks contract address. Use zero address if no hooks.',
+    pattern: '^0x[0-9a-fA-F]{40}$',
+    examples: ['0x0000000000000000000000000000000000000000'],
+  }),
+  baseSymbol: Type.String({
+    description: 'Human-readable symbol for currency0 (base token)',
+    examples: ['USDT'],
+  }),
+  quoteSymbol: Type.String({
+    description: 'Human-readable symbol for currency1 (quote token)',
+    examples: ['BILL'],
+  }),
+});
+
+export type RegisterInfinityPoolRequest = typeof RegisterInfinityPoolRequestSchema.static;

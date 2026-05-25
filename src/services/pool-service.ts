@@ -191,7 +191,7 @@ export class PoolService {
     chain: string,
     network: string,
     connector?: string,
-    type?: 'amm' | 'clmm',
+    type?: 'amm' | 'clmm' | 'infinity',
     search?: string,
   ): Promise<Pool[]> {
     const pools = await this.loadPoolList(chain, network);
@@ -228,7 +228,7 @@ export class PoolService {
   public async getPool(
     chain: string,
     network: string,
-    type: 'amm' | 'clmm',
+    type: 'amm' | 'clmm' | 'infinity',
     baseSymbol: string,
     quoteSymbol: string,
     connector?: string,
@@ -270,8 +270,8 @@ export class PoolService {
       throw new Error('Pool address is required');
     }
 
-    if (!pool.type || !['amm', 'clmm'].includes(pool.type)) {
-      throw new Error('Pool type must be either "amm" or "clmm"');
+    if (!pool.type || !['amm', 'clmm', 'infinity'].includes(pool.type)) {
+      throw new Error('Pool type must be "amm", "clmm", or "infinity"');
     }
 
     if (!pool.network || pool.network.trim() === '') {
@@ -310,8 +310,19 @@ export class PoolService {
       }
     } else if (chainEnum === SupportedChain.ETHEREUM) {
       // Validate Ethereum addresses
-      if (!ethers.utils.isAddress(pool.address)) {
-        throw new Error('Invalid Ethereum pool address');
+      // Infinity pools use a bytes32 PoolId (0x + 64 hex chars) as their address.
+      // All other Ethereum pool types use a standard 40-char contract address.
+      const isInfinity = pool.type === 'infinity';
+      const poolIdPattern = /^0x[0-9a-fA-F]{64}$/;
+
+      if (isInfinity) {
+        if (!poolIdPattern.test(pool.address)) {
+          throw new Error('Invalid Infinity PoolId — expected 0x + 64 hex chars (bytes32)');
+        }
+      } else {
+        if (!ethers.utils.isAddress(pool.address)) {
+          throw new Error('Invalid Ethereum pool address');
+        }
       }
       if (!ethers.utils.isAddress(pool.baseTokenAddress)) {
         throw new Error('Invalid Ethereum base token address');
@@ -375,7 +386,7 @@ export class PoolService {
   public async getPoolByMetadata(
     chain: string,
     network: string,
-    type: 'amm' | 'clmm',
+    type: 'amm' | 'clmm' | 'infinity',
     baseTokenAddress: string,
     quoteTokenAddress: string,
     connector?: string,
@@ -453,7 +464,7 @@ export class PoolService {
   public async getDefaultPools(
     chain: string,
     network: string,
-    type: 'amm' | 'clmm',
+    type: 'amm' | 'clmm' | 'infinity',
     connector?: string,
   ): Promise<Record<string, string>> {
     try {

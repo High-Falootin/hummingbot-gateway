@@ -33,10 +33,21 @@ function getConnectorChain(connector: string): 'solana' | 'ethereum' | null {
  */
 export async function fetchPoolInfo(
   connector: string,
-  type: 'amm' | 'clmm',
+  type: 'amm' | 'clmm' | 'infinity',
   network: string,
   poolAddress: string,
 ): Promise<PoolInfoResult | null> {
+  // Infinity pools are identified by a bytes32 PoolId — NOT a contract address.
+  // fetchPoolInfo must never be called for infinity pools because it would try to
+  // call .fee() on the PoolId as if it were a V3 contract and fail silently.
+  // Use the /pools/infinity registration route instead.
+  if (type === 'infinity') {
+    logger.warn(
+      `fetchPoolInfo called with type=infinity for ${poolAddress} — this is a no-op. Use POST /pools/infinity to register Infinity pools.`,
+    );
+    return null;
+  }
+
   try {
     const chain = getConnectorChain(connector);
 
