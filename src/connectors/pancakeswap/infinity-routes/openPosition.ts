@@ -21,7 +21,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 import { logger } from '../../../services/logger';
 import { Pancakeswap } from '../pancakeswap';
-import { getInfinityClPositionManagerAddress } from '../pancakeswap.contracts';
+import { getInfinityClPositionManagerAddress, supportsInfinity } from '../pancakeswap.contracts';
 import {
   PancakeswapInfinityOpenPositionRequest,
   PancakeswapInfinityOpenPositionRequestType,
@@ -221,19 +221,30 @@ export const infinityOpenPositionRoute: FastifyPluginAsync = async (fastify) => 
           walletAddress ?? (await (await Pancakeswap.getInstance(network ?? 'bsc')).getFirstWalletAddress());
         if (!resolvedWallet) throw fastify.httpErrors.badRequest('walletAddress is required');
 
+        const resolvedNetwork = network ?? 'bsc';
+        if (!supportsInfinity(resolvedNetwork)) {
+          throw fastify.httpErrors.internalServerError(`Infinity not deployed on network: ${resolvedNetwork}`);
+        }
+
+        if (amount0Desired === 0 && amount1Desired === 0) {
+          throw fastify.httpErrors.badRequest(
+            'At least one of amount0Desired or amount1Desired must be greater than zero',
+          );
+        }
+
         return await openInfinityPosition(
           fastify,
-          network ?? 'bsc',
+          resolvedNetwork,
           resolvedWallet,
           currency0,
           currency1,
           fee,
-          tickSpacing ?? 60,
+          tickSpacing,
           hooks ?? '0x0000000000000000000000000000000000000000',
           lowerPrice,
           upperPrice,
-          amount0Desired ?? 0,
-          amount1Desired ?? 0,
+          amount0Desired,
+          amount1Desired,
           slippagePct ?? 0.5,
         );
       } catch (e) {

@@ -14,6 +14,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 import { logger } from '../../../services/logger';
 import { Pancakeswap } from '../pancakeswap';
+import { supportsInfinity } from '../pancakeswap.contracts';
 import {
   PancakeswapInfinityAddLiquidityRequest,
   PancakeswapInfinityAddLiquidityRequestType,
@@ -27,13 +28,16 @@ const INCREASE_LIQUIDITY_SELECTOR = '0x219f5d17';
 const SETTLE_SELECTOR = '0x11da60b4';
 
 async function addLiquidityHandler(
+  fastify: FastifyInstance,
   pancakeswap: Pancakeswap,
   req: PancakeswapInfinityAddLiquidityRequestType,
 ): Promise<PancakeswapInfinityLiquidityResponseType> {
   const { walletAddress, positionTokenId, amount0Desired, amount1Desired, slippagePct = 0.5 } = req;
 
   const ethereum = (pancakeswap as any).ethereum;
-  const wallet = await ethereum.getWallet(walletAddress ?? '');
+  const resolvedWallet = walletAddress ?? (await pancakeswap.getFirstWalletAddress());
+  if (!resolvedWallet) throw fastify.httpErrors.badRequest('walletAddress is required');
+  const wallet = await ethereum.getWallet(resolvedWallet);
   const posManager = pancakeswap.getInfinityClPositionManager();
 
   // Compute min amounts from slippage
@@ -109,9 +113,18 @@ export const addLiquidityRoutes: FastifyPluginAsync = async (fastify: FastifyIns
       },
     },
     async (request, reply) => {
-      const { network = 'bsc' } = request.body;
-      const pancakeswap = await Pancakeswap.getInstance(network);
-      reply.send(await addLiquidityHandler(pancakeswap, request.body));
+      try {
+        const { network = 'bsc' } = request.body;
+        if (!supportsInfinity(network)) {
+          throw fastify.httpErrors.internalServerError(`Infinity not deployed on network: ${network}`);
+        }
+        const pancakeswap = await Pancakeswap.getInstance(network);
+        reply.send(await addLiquidityHandler(fastify, pancakeswap, request.body));
+      } catch (e) {
+        logger.error(e);
+        if (e.statusCode) throw e;
+        throw fastify.httpErrors.internalServerError('Failed to add Infinity liquidity');
+      }
     },
   );
 };

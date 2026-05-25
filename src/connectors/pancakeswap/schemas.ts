@@ -605,20 +605,27 @@ export const PancakeswapClmmExecuteSwapRequest = Type.Object({
 
 const InfinityPoolKeyFields = {
   currency0: Type.String({
+    pattern: '^0x[0-9a-fA-F]{40}$',
     description: 'Address of token0 (sorted — lower address first)',
     examples: ['0x55d398326f99059fF775485246999027B3197955'],
   }),
   currency1: Type.String({
+    pattern: '^0x[0-9a-fA-F]{40}$',
     description: 'Address of token1',
-    examples: ['0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'],
+    examples: ['0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5'],
   }),
   fee: Type.Number({
-    description: 'Pool fee in ppm. Standard: 100, 500, 3000, 10000',
-    examples: [3000],
+    description: 'Pool fee in ppm. Standard: 100=0.01%, 500=0.05%, 2500=0.25%, 3000=0.3%, 10000=1%',
+    examples: [100],
   }),
-  tickSpacing: Type.Optional(Type.Number({ description: 'Tick spacing (1, 10, 60, 200)', examples: [60] })),
+  tickSpacing: Type.Number({
+    minimum: 1,
+    description: 'Tick spacing matching the fee tier (1 for 0.01%, 10 for 0.05%, 60 for 0.3%, 200 for 1%)',
+    examples: [1],
+  }),
   hooks: Type.Optional(
     Type.String({
+      pattern: '^0x[0-9a-fA-F]{40}$',
       description: 'Hooks contract address (zero address for standard pools)',
       default: '0x0000000000000000000000000000000000000000',
     }),
@@ -661,10 +668,16 @@ export const PancakeswapInfinityOpenPositionRequest = Type.Object({
   network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
   walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
   ...InfinityPoolKeyFields,
-  lowerPrice: Type.Number({ description: 'Lower price bound' }),
-  upperPrice: Type.Number({ description: 'Upper price bound' }),
-  amount0Desired: Type.Optional(Type.Number()),
-  amount1Desired: Type.Optional(Type.Number()),
+  lowerPrice: Type.Number({ description: 'Lower price bound (human-readable, e.g. 7.5 BILL per USDT)' }),
+  upperPrice: Type.Number({ description: 'Upper price bound (human-readable). Must be > lowerPrice.' }),
+  amount0Desired: Type.Number({
+    minimum: 0,
+    description: 'Desired amount of token0 in human units. At least one of amount0/amount1 must be > 0.',
+  }),
+  amount1Desired: Type.Number({
+    minimum: 0,
+    description: 'Desired amount of token1 in human units. At least one of amount0/amount1 must be > 0.',
+  }),
   slippagePct: Type.Optional(Type.Number({ minimum: 0, maximum: 100, default: 0.5 })),
 });
 export type PancakeswapInfinityOpenPositionRequestType = Static<typeof PancakeswapInfinityOpenPositionRequest>;
@@ -716,7 +729,11 @@ export const PancakeswapInfinityRemoveLiquidityRequest = Type.Object({
   network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
   walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
   positionTokenId: Type.String({ description: 'NFT token ID of the Infinity position' }),
-  percentageToRemove: Type.Number({ minimum: 0, maximum: 100 }),
+  percentageToRemove: Type.Number({
+    minimum: 0.01,
+    maximum: 100,
+    description: 'Percentage of liquidity to remove (0.01–100). Use 100 to fully close the position.',
+  }),
   slippagePct: Type.Optional(Type.Number({ minimum: 0, maximum: 100, default: 0.5 })),
 });
 export type PancakeswapInfinityRemoveLiquidityRequestType = Static<typeof PancakeswapInfinityRemoveLiquidityRequest>;

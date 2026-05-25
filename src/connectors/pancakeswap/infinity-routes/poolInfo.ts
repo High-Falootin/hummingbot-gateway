@@ -16,6 +16,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { logger } from '../../../services/logger';
 import { sanitizeErrorMessage } from '../../../services/sanitize';
 import { Pancakeswap } from '../pancakeswap';
+import { supportsInfinity } from '../pancakeswap.contracts';
 import {
   PancakeswapInfinityGetPoolInfoRequest,
   PancakeswapInfinityGetPoolInfoRequestType,
@@ -120,10 +121,15 @@ export const infinityPoolInfoRoute: FastifyPluginAsync = async (fastify) => {
           const parts = chainNetwork.split('-');
           resolvedNetwork = parts.length >= 2 ? parts.slice(1).join('-') : chainNetwork;
         }
+        const finalNetwork = resolvedNetwork ?? 'bsc';
+
+        if (!supportsInfinity(finalNetwork)) {
+          throw fastify.httpErrors.internalServerError(`Infinity contracts not available on network ${finalNetwork}`);
+        }
 
         return await getInfinityPoolInfo(
           fastify,
-          resolvedNetwork ?? 'bsc',
+          finalNetwork,
           poolId,
           currency0,
           currency1,

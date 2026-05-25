@@ -13,6 +13,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 import { logger } from '../../../services/logger';
 import { Pancakeswap } from '../pancakeswap';
+import { supportsInfinity } from '../pancakeswap.contracts';
 import {
   PancakeswapInfinityCollectFeesRequest,
   PancakeswapInfinityCollectFeesRequestType,
@@ -24,13 +25,16 @@ import {
 const MaxUint128 = BigNumber.from('0xffffffffffffffffffffffffffffffff');
 
 async function collectFeesHandler(
+  fastify: FastifyInstance,
   pancakeswap: Pancakeswap,
   req: PancakeswapInfinityCollectFeesRequestType,
 ): Promise<PancakeswapInfinityCollectFeesResponseType> {
   const { walletAddress, positionTokenId } = req;
 
   const ethereum = (pancakeswap as any).ethereum;
-  const wallet = await ethereum.getWallet(walletAddress ?? '');
+  const resolvedWallet = walletAddress ?? (await pancakeswap.getFirstWalletAddress());
+  if (!resolvedWallet) throw fastify.httpErrors.badRequest('walletAddress is required');
+  const wallet = await ethereum.getWallet(resolvedWallet);
   const posManager = pancakeswap.getInfinityClPositionManager();
 
   logger.info(`Infinity collectFees: tokenId=${positionTokenId} recipient=${wallet.address}`);
@@ -88,9 +92,18 @@ export const collectFeesRoutes: FastifyPluginAsync = async (fastify: FastifyInst
       },
     },
     async (request, reply) => {
-      const { network = 'bsc' } = request.body;
-      const pancakeswap = await Pancakeswap.getInstance(network);
-      reply.send(await collectFeesHandler(pancakeswap, request.body));
+      try {
+        const { network = 'bsc' } = request.body;
+        if (!supportsInfinity(network)) {
+          throw fastify.httpErrors.internalServerError(`Infinity not deployed on network: ${network}`);
+        }
+        const pancakeswap = await Pancakeswap.getInstance(network);
+        reply.send(await collectFeesHandler(fastify, pancakeswap, request.body));
+      } catch (e) {
+        logger.error(e);
+        if (e.statusCode) throw e;
+        throw fastify.httpErrors.internalServerError('Failed to collect Infinity fees');
+      }
     },
   );
 };

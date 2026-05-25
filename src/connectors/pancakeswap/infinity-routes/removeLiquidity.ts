@@ -9,6 +9,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 import { logger } from '../../../services/logger';
 import { Pancakeswap } from '../pancakeswap';
+import { supportsInfinity } from '../pancakeswap.contracts';
 import {
   PancakeswapInfinityRemoveLiquidityRequest,
   PancakeswapInfinityRemoveLiquidityRequestType,
@@ -20,28 +21,33 @@ import {
 const MaxUint128 = BigNumber.from('0xffffffffffffffffffffffffffffffff');
 
 async function removeLiquidityHandler(
+  fastify: FastifyInstance,
   pancakeswap: Pancakeswap,
   req: PancakeswapInfinityRemoveLiquidityRequestType,
 ): Promise<PancakeswapInfinityRemoveLiquidityResponseType> {
   const { walletAddress, positionTokenId, percentageToRemove, slippagePct = 0.5 } = req;
 
   const ethereum = (pancakeswap as any).ethereum;
-  const wallet = await ethereum.getWallet(walletAddress ?? '');
+  const resolvedWallet = walletAddress ?? (await pancakeswap.getFirstWalletAddress());
+  if (!resolvedWallet) throw fastify.httpErrors.badRequest('walletAddress is required');
+  const wallet = await ethereum.getWallet(resolvedWallet);
   const posManager = pancakeswap.getInfinityClPositionManager();
 
   // Fetch current position to calculate liquidity to remove
   const position = await posManager.positions(positionTokenId);
   const currentLiquidity: BigNumber = position.liquidity;
 
-  // Calculate liquidity to remove (percentage)
+  // Calculate liquidity to remove (percentage expressed as 0.01–100)
   const liquidityToRemove = currentLiquidity.mul(BigNumber.from(Math.floor(percentageToRemove * 100))).div(10000);
 
   if (liquidityToRemove.lte(0)) {
-    throw new Error('No liquidity to remove');
+    throw fastify.httpErrors.badRequest('No liquidity to remove for this position');
   }
 
-  const slippageFactor = BigNumber.from(Math.floor((1 - slippagePct / 100) * 10000));
-  const amount0Min = BigNumber.from(0); // min 0 — slippage applied implicitly by liquidity math
+  // Note: amount0Min/amount1Min set to 0 here because we don’t know the split at request time.
+  // TODO: fetch current position amounts and apply slippagePct before submission.
+  const _slippagePct = slippagePct; // captured for future use
+  const amount0Min = BigNumber.from(0);
   const amount1Min = BigNumber.from(0);
   const deadline = Math.floor(Date.now() / 1000) + 300;
 
@@ -117,9 +123,18 @@ export const removeLiquidityRoutes: FastifyPluginAsync = async (fastify: Fastify
       },
     },
     async (request, reply) => {
-      const { network = 'bsc' } = request.body;
-      const pancakeswap = await Pancakeswap.getInstance(network);
-      reply.send(await removeLiquidityHandler(pancakeswap, request.body));
+      try {
+        const { network = 'bsc' } = request.body;
+        if (!supportsInfinity(network)) {
+          throw fastify.httpErrors.internalServerError(`Infinity not deployed on network: ${network}`);
+        }
+        const pancakeswap = await Pancakeswap.getInstance(network);
+        reply.send(await removeLiquidityHandler(fastify, pancakeswap, request.body));
+      } catch (e) {
+        logger.error(e);
+        if (e.statusCode) throw e;
+        throw fastify.httpErrors.internalServerError('Failed to remove Infinity liquidity');
+      }
     },
   );
 };

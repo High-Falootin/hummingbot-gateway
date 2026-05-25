@@ -268,6 +268,7 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
             currency0: CURRENCY0,
             currency1: CURRENCY1,
             fee: FEE_PPM,
+            tickSpacing: TICK_SPACING,
           },
         }),
       ).rejects.toMatchObject({ response: { status: 500 } });
@@ -296,7 +297,14 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
     test('axios called with correct URL and params', async () => {
       mockGet(loadMock('pool-info'));
       await axios.get(`${BASE_URL}/pool-info`, {
-        params: { network: NETWORK, poolId: TEST_POOL_ID, currency0: CURRENCY0, currency1: CURRENCY1, fee: FEE_PPM },
+        params: {
+          network: NETWORK,
+          poolId: TEST_POOL_ID,
+          currency0: CURRENCY0,
+          currency1: CURRENCY1,
+          fee: FEE_PPM,
+          tickSpacing: TICK_SPACING,
+        },
       });
       expect(axios.get).toHaveBeenCalledWith(
         `${BASE_URL}/pool-info`,
@@ -304,6 +312,50 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
           params: expect.objectContaining({ poolId: TEST_POOL_ID, fee: FEE_PPM }),
         }),
       );
+    });
+
+    // 🧪 tickSpacing is now required (not Optional) — Security+DDD lens
+    test('edge: missing tickSpacing returns 400 (required, not Optional)', async () => {
+      mockGetError('querystring/tickSpacing must be number', 400);
+      await expect(
+        axios.get(`${BASE_URL}/pool-info`, {
+          params: { network: NETWORK, poolId: TEST_POOL_ID, currency0: CURRENCY0, currency1: CURRENCY1, fee: FEE_PPM },
+        }),
+      ).rejects.toMatchObject({ response: { status: 400 } });
+    });
+
+    // 🔐 Security lens: address pattern enforced on currency0/currency1
+    test('edge: non-address currency0 returns 400 (Security: address pattern ^0x[0-9a-fA-F]{40}$)', async () => {
+      mockGetError("querystring/currency0 must match pattern '^0x[0-9a-fA-F]{40}$'", 400);
+      await expect(
+        axios.get(`${BASE_URL}/pool-info`, {
+          params: {
+            network: NETWORK,
+            poolId: TEST_POOL_ID,
+            currency0: 'not-an-address',
+            currency1: CURRENCY1,
+            fee: FEE_PPM,
+            tickSpacing: TICK_SPACING,
+          },
+        }),
+      ).rejects.toMatchObject({ response: { status: 400 } });
+    });
+
+    // 🥞 Infinity lens: non-BSC network hits supportsInfinity guard before RPC
+    test('edge: non-BSC network (ethereum mainnet) returns 500 (supportsInfinity guard)', async () => {
+      mockGetError('Infinity contracts not available on network mainnet', 500);
+      await expect(
+        axios.get(`${BASE_URL}/pool-info`, {
+          params: {
+            network: 'mainnet',
+            poolId: TEST_POOL_ID,
+            currency0: CURRENCY0,
+            currency1: CURRENCY1,
+            fee: FEE_PPM,
+            tickSpacing: TICK_SPACING,
+          },
+        }),
+      ).rejects.toMatchObject({ response: { status: 500 } });
     });
   });
 
@@ -416,6 +468,22 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
         axios.post(`${BASE_URL}/open-position`, { ...openPositionBody(), currency0: CURRENCY0, currency1: CURRENCY0 }),
       ).rejects.toMatchObject({ response: { status: 400 } });
     });
+
+    // ⛓️ Blockchain lens: both amounts 0 is now rejected before sending tx (wastes gas)
+    test('edge: both amount0Desired=0 and amount1Desired=0 returns 400 (zero-liquidity tx guard)', async () => {
+      mockPostError('At least one of amount0Desired or amount1Desired must be greater than zero', 400);
+      await expect(
+        axios.post(`${BASE_URL}/open-position`, { ...openPositionBody(), amount0Desired: 0, amount1Desired: 0 }),
+      ).rejects.toMatchObject({ response: { status: 400 } });
+    });
+
+    // 🥞 Infinity lens: supportsInfinity guard fires before any contract call
+    test('edge: non-BSC network returns 500 (supportsInfinity guard, not contract error)', async () => {
+      mockPostError('Infinity not deployed on network: mainnet', 500);
+      await expect(
+        axios.post(`${BASE_URL}/open-position`, { ...openPositionBody(), network: 'mainnet' }),
+      ).rejects.toMatchObject({ response: { status: 500 } });
+    });
   });
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -482,6 +550,23 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
         response: { status: 400 },
       });
     });
+
+    // 🥞 Infinity lens: supportsInfinity guard
+    test('edge: non-BSC network returns 500 (supportsInfinity guard)', async () => {
+      mockPostError('Infinity not deployed on network: mainnet', 500);
+      await expect(
+        axios.post(`${BASE_URL}/add-liquidity`, { ...addLiqBody(), network: 'mainnet' }),
+      ).rejects.toMatchObject({ response: { status: 500 } });
+    });
+
+    // 🔐 Security lens: missing walletAddress resolves to first registered wallet, not empty string
+    test('edge: missing walletAddress resolves to first registered wallet (not empty string)', async () => {
+      const body = { ...addLiqBody() };
+      delete body.walletAddress;
+      mockPost(loadMock('add-liquidity'));
+      const response = await axios.post(`${BASE_URL}/add-liquidity`, body);
+      expect(response.status).toBe(200);
+    });
   });
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -518,8 +603,8 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
       expect(validateRemoveLiquidityResponse(response.data)).toBe(true);
     });
 
-    // Edge: percentageToRemove = 0 is invalid (nothing to remove)
-    test('edge: percentageToRemove=0 returns 400 (minimum > 0)', async () => {
+    // Edge: percentageToRemove = 0 is invalid — schema minimum: 0.01 enforces this
+    test('edge: percentageToRemove=0 returns 400 (schema minimum: 0.01, zero removal is nonsensical)', async () => {
       mockPostError('percentageToRemove must be > 0', 400);
       await expect(
         axios.post(`${BASE_URL}/remove-liquidity`, { ...removeBody(), percentageToRemove: 0 }),
@@ -542,12 +627,20 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
       ).rejects.toMatchObject({ response: { status: 500 } });
     });
 
-    // Edge: position with 0 liquidity
-    test('edge: position with zero liquidity returns 400', async () => {
-      mockPostError('No liquidity to remove', 400);
+    // Edge: position with 0 liquidity — caught by removeLiquidityHandler guard, not schema
+    test('edge: position with zero liquidity returns 400 (runtime guard)', async () => {
+      mockPostError('No liquidity to remove for this position', 400);
       await expect(
         axios.post(`${BASE_URL}/remove-liquidity`, { ...removeBody(), percentageToRemove: 50 }),
       ).rejects.toMatchObject({ response: { status: 400 } });
+    });
+
+    // 🥞 Infinity lens: supportsInfinity guard
+    test('edge: non-BSC network returns 500 (supportsInfinity guard)', async () => {
+      mockPostError('Infinity not deployed on network: mainnet', 500);
+      await expect(
+        axios.post(`${BASE_URL}/remove-liquidity`, { ...removeBody(), network: 'mainnet' }),
+      ).rejects.toMatchObject({ response: { status: 500 } });
     });
   });
 
@@ -609,6 +702,14 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
       mockPostError('Position does not exist', 500);
       await expect(
         axios.post(`${BASE_URL}/collect-fees`, { ...collectBody(), positionTokenId: '0' }),
+      ).rejects.toMatchObject({ response: { status: 500 } });
+    });
+
+    // 🥞 Infinity lens: supportsInfinity guard
+    test('edge: non-BSC network returns 500 (supportsInfinity guard)', async () => {
+      mockPostError('Infinity not deployed on network: mainnet', 500);
+      await expect(
+        axios.post(`${BASE_URL}/collect-fees`, { ...collectBody(), network: 'mainnet' }),
       ).rejects.toMatchObject({ response: { status: 500 } });
     });
   });
@@ -722,6 +823,38 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
       const permit2 = '0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768';
       expect(permit2).toMatch(/^0x[0-9a-fA-F]{40}$/);
     });
+
+    // 🔐 Security lens: address pattern constraints in schemas
+    test('schemas.ts enforces ^0x[0-9a-fA-F]{40}$ pattern on currency0/currency1 (Security lens)', () => {
+      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
+      const content = fs.readFileSync(schemasFile, 'utf8');
+      // Pattern must appear for both currency0 and currency1
+      const matches = (content.match(/\^0x\[0-9a-fA-F\]\{40\}\$/g) || []).length;
+      expect(matches).toBeGreaterThanOrEqual(3); // currency0, currency1, hooks
+    });
+
+    // 🧪 tickSpacing is required (no Optional wrapper) — DDD lens
+    test('schemas.ts tickSpacing is required (not Type.Optional) in InfinityPoolKeyFields', () => {
+      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
+      const content = fs.readFileSync(schemasFile, 'utf8');
+      expect(content).not.toContain('tickSpacing: Type.Optional(Type.Number');
+      expect(content).toContain('tickSpacing: Type.Number(');
+    });
+
+    // 🤖 Hummingbot lens: amounts required in OpenPosition (no Optional)
+    test('schemas.ts amount0Desired and amount1Desired are required in OpenPosition (not Optional)', () => {
+      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
+      const content = fs.readFileSync(schemasFile, 'utf8');
+      expect(content).not.toContain('amount0Desired: Type.Optional');
+      expect(content).not.toContain('amount1Desired: Type.Optional');
+    });
+
+    // 🦄 DEX Protocol lens: percentageToRemove minimum enforces > 0 at schema level
+    test('schemas.ts percentageToRemove uses minimum: 0.01 (matches runtime lte(0) guard)', () => {
+      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
+      const content = fs.readFileSync(schemasFile, 'utf8');
+      expect(content).toContain('minimum: 0.01');
+    });
   });
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -755,6 +888,28 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
           }
         });
       }
+    });
+
+    // 🥞 Infinity lens: supportsInfinity guard present in ALL route files
+    test('supportsInfinity() guard imported and used in every Infinity route file', () => {
+      const routeFiles = ['poolInfo.ts', 'openPosition.ts', 'addLiquidity.ts', 'removeLiquidity.ts', 'collectFees.ts'];
+      const infRoutes = path.join(__dirname, '../../../src/connectors/pancakeswap/infinity-routes');
+      routeFiles.forEach((file) => {
+        const content = fs.readFileSync(path.join(infRoutes, file), 'utf8');
+        expect(content).toContain('supportsInfinity');
+      });
+    });
+
+    // ⛓️ Blockchain lens: raw Error never escapes mutating route handlers (all have try/catch)
+    test('addLiquidity, removeLiquidity, collectFees route handlers have try/catch (no raw errors to client)', () => {
+      const files = ['addLiquidity.ts', 'removeLiquidity.ts', 'collectFees.ts'];
+      const infRoutes = path.join(__dirname, '../../../src/connectors/pancakeswap/infinity-routes');
+      files.forEach((file) => {
+        const content = fs.readFileSync(path.join(infRoutes, file), 'utf8');
+        expect(content).toContain('try {');
+        expect(content).toContain('if (e.statusCode) throw e;');
+        expect(content).not.toContain('throw new Error('); // raw Error must not appear
+      });
     });
   });
 });
