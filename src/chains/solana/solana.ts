@@ -260,7 +260,18 @@ export class Solana {
       const safeWalletPath = getSafeWalletFilePath('solana', validatedAddress);
 
       // Read the wallet file using the safe path
-      const encryptedPrivateKey: string = await fse.readFile(safeWalletPath, 'utf8');
+      const fileContent: string = await fse.readFile(safeWalletPath, 'utf8');
+
+      // Support both new JSON format {encryptedKey, network} and legacy raw string
+      let encryptedPrivateKey = fileContent;
+      try {
+        const parsed = JSON.parse(fileContent);
+        if (parsed && typeof parsed.encryptedKey === 'string') {
+          encryptedPrivateKey = parsed.encryptedKey;
+        }
+      } catch {
+        // Legacy format: raw encrypted string
+      }
 
       const walletKey = ConfigManagerCertPassphrase.readWalletKey();
       if (!walletKey) {
@@ -1096,6 +1107,17 @@ export class Solana {
   async close() {
     if (this.network in Solana._instances) {
       delete Solana._instances[this.network];
+    }
+  }
+
+  /**
+   * Evict a cached instance so the next call to getInstance() re-creates it.
+   * Use this after changing nodeURL in config so the new provider is picked up.
+   */
+  public static resetInstance(network: string): void {
+    if (Solana._instances && network in Solana._instances) {
+      delete Solana._instances[network];
+      logger.info(`Solana instance for '${network}' evicted — will re-initialize on next request`);
     }
   }
 

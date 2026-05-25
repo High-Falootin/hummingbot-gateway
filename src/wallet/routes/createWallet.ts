@@ -14,15 +14,17 @@ export const createWalletRoute: FastifyPluginAsync = async (fastify) => {
     '/create',
     {
       schema: {
-        description: 'Create a new wallet and add it to Gateway',
+        description:
+          'Generate a new random wallet and add it to Gateway. Optionally specify `network` or `chainNetwork` ' +
+          'to register it for a specific network (defaults to mainnet/mainnet-beta).',
         tags: ['/wallet'],
         body: {
           ...CreateWalletRequestSchema,
           examples: [
-            {
-              chain: 'solana',
-              setDefault: true,
-            },
+            { chain: 'solana', setDefault: true },
+            { chain: 'ethereum', setDefault: false },
+            { chain: 'ethereum', network: 'bsc' },
+            { chainNetwork: 'ethereum-arbitrum' },
           ],
         },
         response: {

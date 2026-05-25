@@ -543,7 +543,20 @@ export class Ethereum {
       const validatedAddress = Ethereum.validateAddress(address);
 
       const path = `${walletPath}/ethereum`;
-      const encryptedPrivateKey = await fse.readFile(`${path}/${validatedAddress}.json`, 'utf8');
+      const fileContent = await fse.readFile(`${path}/${validatedAddress}.json`, 'utf8');
+
+      // Support both new JSON format {encryptedKey, network} and legacy raw string
+      let encryptedPrivateKey = fileContent;
+      let network = this.network;
+      try {
+        const parsed = JSON.parse(fileContent);
+        if (parsed && typeof parsed.encryptedKey === 'string') {
+          encryptedPrivateKey = parsed.encryptedKey;
+          network = parsed.network || this.network;
+        }
+      } catch {
+        // Legacy format: raw encrypted string
+      }
 
       const walletKey = ConfigManagerCertPassphrase.readWalletKey();
       if (!walletKey) {
@@ -777,6 +790,17 @@ export class Ethereum {
   public async close() {
     if (this.network in Ethereum._instances) {
       delete Ethereum._instances[this.network];
+    }
+  }
+
+  /**
+   * Evict a cached instance so the next call to getInstance() re-creates it.
+   * Use this after changing nodeURL in config so the new provider is picked up.
+   */
+  public static resetInstance(network: string): void {
+    if (Ethereum._instances && network in Ethereum._instances) {
+      delete Ethereum._instances[network];
+      logger.info(`Ethereum instance for '${network}' evicted — will re-initialize on next request`);
     }
   }
 
@@ -1053,26 +1077,15 @@ export class Ethereum {
     // Treat empty array as if no tokens were specified
     const effectiveTokens = tokens && tokens.length === 0 ? undefined : tokens;
 
-    // Check if this is a hardware wallet
-    const isHardware = await this.isHardwareWallet(address);
-    let wallet: Wallet | null = null;
-
-    if (!isHardware) {
-      wallet = await this.getWallet(address);
-    }
-
-    // Always get native token balance
-    const nativeBalance = isHardware
-      ? await this.getNativeBalanceByAddress(address)
-      : await this.getNativeBalance(wallet!);
+    // Balance queries are read-only — no private key needed, use address directly.
+    // This keeps the Security lens: never decrypt keys for operations that don't sign.
+    const nativeBalance = await this.getNativeBalanceByAddress(address);
     balances[this.nativeTokenSymbol] = parseFloat(tokenValueToString(nativeBalance));
 
     if (!effectiveTokens) {
-      // No tokens specified, check all tokens in token list
-      await this.getAllTokenBalances(address, wallet, isHardware, balances);
+      await this.getAllTokenBalances(address, null, true, balances);
     } else {
-      // Get specific token balances
-      await this.getSpecificTokenBalances(effectiveTokens, address, wallet, isHardware, balances);
+      await this.getSpecificTokenBalances(effectiveTokens, address, null, true, balances);
     }
 
     return balances;

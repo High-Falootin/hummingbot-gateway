@@ -6,11 +6,25 @@ export const WalletAddressSchema = Type.String({
 });
 
 export const AddWalletRequestSchema = Type.Object({
-  chain: Type.String({
-    description: 'Blockchain to add wallet to',
-    enum: ['ethereum', 'solana'],
-    examples: ['solana', 'ethereum'],
-  }),
+  chain: Type.Optional(
+    Type.String({
+      description: 'Blockchain to add wallet to. Required unless chainNetwork is provided.',
+      enum: ['ethereum', 'solana'],
+      examples: ['solana', 'ethereum'],
+    }),
+  ),
+  network: Type.Optional(
+    Type.String({
+      description: 'Network within the chain (e.g. bsc, mainnet, arbitrum). Defaults to mainnet/mainnet-beta.',
+      examples: ['mainnet', 'bsc', 'arbitrum', 'mainnet-beta'],
+    }),
+  ),
+  chainNetwork: Type.Optional(
+    Type.String({
+      description: 'Chain and network combined (e.g. ethereum-bsc). Overrides chain/network if provided.',
+      examples: ['ethereum-mainnet', 'ethereum-bsc', 'ethereum-arbitrum'],
+    }),
+  ),
   privateKey: Type.String({
     description: 'Private key for the wallet',
     examples: ['<your-private-key>'],
@@ -27,10 +41,21 @@ export const AddWalletResponseSchema = Type.Object({
   address: Type.String({
     description: 'The wallet address that was added',
   }),
+  network: Type.String({
+    description: 'The network the wallet was registered for',
+  }),
 });
 
 export const GetWalletsQuerySchema = Type.Object({
   showHardware: Type.Optional(Type.Boolean({ default: true })),
+});
+
+export const WalletEntrySchema = Type.Object({
+  address: WalletAddressSchema,
+  networks: Type.Array(Type.String(), {
+    description: 'All networks this wallet address has been registered for (e.g. ["mainnet", "bsc"])',
+    examples: [['mainnet', 'bsc'], ['mainnet-beta']],
+  }),
 });
 
 export const GetWalletResponseSchema = Type.Object({
@@ -38,12 +63,28 @@ export const GetWalletResponseSchema = Type.Object({
     description: 'Blockchain name',
     examples: ['solana', 'ethereum'],
   }),
-  walletAddresses: Type.Array(WalletAddressSchema, {
-    description: 'List of regular wallet addresses with private keys',
+  defaultWallet: Type.Optional(
+    Type.String({
+      description: 'The default wallet address for this chain, if configured',
+      examples: ['0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf'],
+    }),
+  ),
+  walletAddresses: Type.Array(Type.String(), {
+    description: 'List of regular wallet addresses (backwards-compatible plain strings)',
   }),
+  walletDetails: Type.Optional(
+    Type.Array(WalletEntrySchema, {
+      description: 'Enriched wallet entries with per-address network metadata (e.g. bsc, mainnet)',
+    }),
+  ),
   hardwareWalletAddresses: Type.Optional(
-    Type.Array(WalletAddressSchema, {
-      description: 'List of hardware wallet addresses (Ledger)',
+    Type.Array(Type.String(), {
+      description: 'List of hardware wallet addresses (backwards-compatible plain strings)',
+    }),
+  ),
+  hardwareWalletDetails: Type.Optional(
+    Type.Array(WalletEntrySchema, {
+      description: 'Enriched hardware wallet entries with per-address network metadata',
     }),
   ),
 });
@@ -78,12 +119,27 @@ export const SignMessageResponseSchema = Type.Object({
 
 // Hardware wallet schemas
 export const AddHardwareWalletRequestSchema = Type.Object({
-  chain: Type.String({
-    description: 'Blockchain for hardware wallet',
-    enum: ['ethereum', 'solana'],
-    default: 'solana',
-    examples: ['solana', 'ethereum'],
-  }),
+  chain: Type.Optional(
+    Type.String({
+      description: 'Blockchain for hardware wallet. Required unless chainNetwork is provided.',
+      enum: ['ethereum', 'solana'],
+      default: 'solana',
+      examples: ['solana', 'ethereum'],
+    }),
+  ),
+  network: Type.Optional(
+    Type.String({
+      description:
+        'Network within the chain (e.g. bsc, mainnet, arbitrum). Optional — defaults to mainnet/mainnet-beta.',
+      examples: ['mainnet', 'bsc', 'arbitrum', 'mainnet-beta'],
+    }),
+  ),
+  chainNetwork: Type.Optional(
+    Type.String({
+      description: 'Chain and network combined (e.g. ethereum-bsc). Overrides chain/network if provided.',
+      examples: ['ethereum-mainnet', 'ethereum-bsc', 'solana-mainnet-beta'],
+    }),
+  ),
   address: Type.String({
     description: 'Hardware wallet address to add (must exist on connected Ledger device)',
   }),
@@ -105,6 +161,12 @@ export const AddHardwareWalletResponseSchema = Type.Object({
   derivationPath: Type.String({
     description: 'BIP32/BIP44 derivation path used',
   }),
+  network: Type.Optional(
+    Type.String({
+      description: 'Network the hardware wallet was registered for',
+      examples: ['mainnet', 'bsc', 'mainnet-beta'],
+    }),
+  ),
   message: Type.String({
     description: 'Success message',
   }),
@@ -179,11 +241,26 @@ export type SetDefaultWalletResponse = Static<typeof SetDefaultWalletResponseSch
 
 // Create wallet schemas
 export const CreateWalletRequestSchema = Type.Object({
-  chain: Type.String({
-    description: 'Blockchain to create wallet for',
-    enum: ['ethereum', 'solana'],
-    examples: ['solana', 'ethereum'],
-  }),
+  chain: Type.Optional(
+    Type.String({
+      description: 'Blockchain to create wallet for. Required unless chainNetwork is provided.',
+      enum: ['ethereum', 'solana'],
+      examples: ['solana', 'ethereum'],
+    }),
+  ),
+  network: Type.Optional(
+    Type.String({
+      description:
+        'Network within the chain (e.g. bsc, mainnet, arbitrum). Optional — defaults to mainnet/mainnet-beta.',
+      examples: ['mainnet', 'bsc', 'arbitrum', 'mainnet-beta'],
+    }),
+  ),
+  chainNetwork: Type.Optional(
+    Type.String({
+      description: 'Chain and network combined (e.g. ethereum-bsc). Overrides chain/network if provided.',
+      examples: ['ethereum-mainnet', 'ethereum-bsc', 'solana-mainnet-beta'],
+    }),
+  ),
   setDefault: Type.Optional(
     Type.Boolean({
       description: 'Set this wallet as the default for the chain',
@@ -198,6 +275,9 @@ export const CreateWalletResponseSchema = Type.Object({
   }),
   chain: Type.String({
     description: 'Blockchain name',
+  }),
+  network: Type.String({
+    description: 'Network the wallet was created for',
   }),
 });
 
@@ -284,3 +364,47 @@ export type ShowPrivateKeyRequest = Static<typeof ShowPrivateKeyRequestSchema>;
 export type ShowPrivateKeyResponse = Static<typeof ShowPrivateKeyResponseSchema>;
 export type SendTransactionRequest = Static<typeof SendTransactionRequestSchema>;
 export type SendTransactionResponse = Static<typeof SendTransactionResponseSchema>;
+
+// Balance schemas
+export const WalletBalanceRequestSchema = Type.Object({
+  chain: Type.Optional(
+    Type.String({
+      description: 'Blockchain name. Optional when chainNetwork is provided.',
+      enum: ['ethereum', 'solana'],
+      examples: ['ethereum', 'solana'],
+    }),
+  ),
+  network: Type.Optional(
+    Type.String({
+      description: 'Network within the chain (e.g. bsc, mainnet, arbitrum). Defaults to mainnet/mainnet-beta.',
+      examples: ['mainnet', 'bsc', 'arbitrum', 'mainnet-beta'],
+    }),
+  ),
+  chainNetwork: Type.Optional(
+    Type.String({
+      description: 'Chain and network combined (e.g. ethereum-bsc). Takes priority over chain/network.',
+      examples: ['ethereum-mainnet', 'ethereum-bsc', 'ethereum-arbitrum'],
+    }),
+  ),
+  address: Type.String({
+    description: 'Wallet address to get balances for',
+  }),
+  tokens: Type.Optional(
+    Type.Array(Type.String(), {
+      description: 'Token symbols to fetch balances for. Omit or pass [] to return all tokens with non-zero balances.',
+      examples: [['ETH', 'USDC', 'USDT']],
+    }),
+  ),
+});
+
+export const WalletBalanceResponseSchema = Type.Object({
+  chain: Type.String({ description: 'Blockchain name' }),
+  network: Type.String({ description: 'Network name' }),
+  address: Type.String({ description: 'Wallet address' }),
+  balances: Type.Record(Type.String(), Type.Number(), { description: 'Map of token symbol to balance amount' }),
+  timestamp: Type.Number({ description: 'Unix timestamp of the balance check' }),
+});
+
+export type WalletEntry = Static<typeof WalletEntrySchema>;
+export type WalletBalanceRequest = Static<typeof WalletBalanceRequestSchema>;
+export type WalletBalanceResponse = Static<typeof WalletBalanceResponseSchema>;

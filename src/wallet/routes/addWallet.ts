@@ -9,16 +9,18 @@ export const addWalletRoute: FastifyPluginAsync = async (fastify) => {
     '/add',
     {
       schema: {
-        description: 'Add a new wallet using a private key',
+        description:
+          'Add an existing wallet using a private key. Optionally specify `network` (e.g. `bsc`, `arbitrum`) ' +
+          'or use `chainNetwork` shorthand (e.g. `ethereum-bsc`). The same address can be registered for ' +
+          'multiple networks — each registration appears as a separate entry in walletDetails.',
         tags: ['/wallet'],
         body: {
           ...AddWalletRequestSchema,
           examples: [
-            {
-              chain: 'solana',
-              privateKey: '<your-private-key>',
-              setDefault: true,
-            },
+            { chain: 'ethereum', privateKey: '<your-private-key>', setDefault: true },
+            { chain: 'ethereum', network: 'bsc', privateKey: '<your-private-key>' },
+            { chainNetwork: 'ethereum-arbitrum', privateKey: '<your-private-key>' },
+            { chain: 'solana', privateKey: '<your-private-key>', setDefault: true },
           ],
         },
         response: {
