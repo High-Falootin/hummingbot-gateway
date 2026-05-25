@@ -1,13 +1,27 @@
 /**
  * Pancakeswap contract addresses for various networks
- * This file contains the contract addresses for Pancakeswap V2, V3, and Universal Router contracts
- * on different networks. These are not meant to be edited by users.
+ * This file contains the contract addresses for Pancakeswap V2, V3, Universal Router, and
+ * Infinity (V4-style singleton) contracts on different networks.
+ * These are not meant to be edited by users.
  *
- * Last updated: January 2025
+ * Last updated: May 2026
  * Sources:
  * - V2: https://developer.pancakeswap.finance/contracts/v2/addresses
  * - V3: https://developer.pancakeswap.finance/contracts/v3/addresses
  * - Universal Router: https://developer.pancakeswap.finance/contracts/v3/addresses#smart-router
+ * - Infinity (V4): https://github.com/pancakeswap/infinity-core / infinity-periphery
+ *
+ * ─── INFINITY ARCHITECTURE NOTE ──────────────────────────────────────────────
+ * PancakeSwap Infinity is a V4-style singleton architecture:
+ *   • All CL pools live inside ONE PoolManager contract — there are NO per-pool contracts.
+ *   • Pools are identified by a bytes32 PoolId (keccak256 hash of a PoolKey struct).
+ *   • Example PoolId: 0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20
+ *     (64 hex chars — NOT a 40-char address; passing it to V3 routes will throw)
+ *   • PoolKey = { currency0, currency1, fee, tickSpacing, hooks }
+ *   • Token balances are held by the Vault, not individual pool contracts.
+ *   • Position NFTs are minted by CL PositionManager (NOT the V3 NftManager).
+ *   • Token approvals go through Permit2, not direct ERC20 approval to the manager.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { Address } from 'viem';
@@ -23,9 +37,19 @@ export interface PancakeswapContractAddresses {
   pancakeswapV3QuoterV2ContractAddress: Address;
   pancakeswapV3FactoryAddress: Address;
   pancakeswapV3PoolDeployerAddress: Address;
+  pancakeswapV3MasterchefAddress: Address;
 
   // Universal Router V2 (unified router for all protocols)
   universalRouterV2Address: Address;
+
+  // ── Infinity (V4-style singleton) contracts — optional, BSC mainnet only for now ──
+  // IMPORTANT: Pool IDs (bytes32, 64 hex chars) are NOT addresses. They are keccak256
+  // hashes of a PoolKey and are looked up inside the singleton clPoolManager.
+  infinityVaultAddress?: Address; // Holds all token balances across all Infinity pools
+  infinityClPoolManagerAddress?: Address; // Singleton: all CL pools live here, identified by bytes32 PoolId
+  infinityClPositionManagerAddress?: Address; // Periphery: mints/burns position NFTs for CL pools
+  infinityClQuoterAddress?: Address; // Periphery: quotes for CL pool swaps/positions
+  infinityPermit2Address?: Address; // Canonical Permit2 — required for token approvals into Infinity
 }
 
 export interface NetworkContractAddresses {
@@ -43,6 +67,7 @@ export const contractAddresses: NetworkContractAddresses = {
     pancakeswapV3QuoterV2ContractAddress: '0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997',
     pancakeswapV3FactoryAddress: '0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865',
     pancakeswapV3PoolDeployerAddress: '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9',
+    pancakeswapV3MasterchefAddress: '0x556B9306565093C855AEA9AE92A594704c2Cd59e',
     // Universal Router V2 - Official Pancakeswap address
     universalRouterV2Address: '0x13f4EA83D0bd40E75C8222255bc855a974568Dd4',
   },
@@ -56,6 +81,7 @@ export const contractAddresses: NetworkContractAddresses = {
     pancakeswapV3QuoterV2ContractAddress: '0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997',
     pancakeswapV3FactoryAddress: '0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865',
     pancakeswapV3PoolDeployerAddress: '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9',
+    pancakeswapV3MasterchefAddress: '0x5e09ACf80C0296740eC5d6F643005a4ef8DaA694',
     // Universal Router V2 - Official Pancakeswap address
     universalRouterV2Address: '0x32226588378236Fd0c7c4053999F88aC0e5cAc77',
   },
@@ -69,6 +95,7 @@ export const contractAddresses: NetworkContractAddresses = {
     pancakeswapV3QuoterV2ContractAddress: '0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997',
     pancakeswapV3FactoryAddress: '0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865',
     pancakeswapV3PoolDeployerAddress: '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9',
+    pancakeswapV3MasterchefAddress: '0xC6A2Db661D5a5690172d8eB0a7DEA2d3008665A3',
     // Universal Router V2 - Official Pancakeswap address
     universalRouterV2Address: '0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86',
   },
@@ -82,8 +109,16 @@ export const contractAddresses: NetworkContractAddresses = {
     pancakeswapV3QuoterV2ContractAddress: '0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997',
     pancakeswapV3FactoryAddress: '0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865',
     pancakeswapV3PoolDeployerAddress: '0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9',
+    pancakeswapV3MasterchefAddress: '0x556B9306565093C855AEA9AE92A594704c2Cd59e',
     // Universal Router V2 - Official Pancakeswap address
     universalRouterV2Address: '0x13f4EA83D0bd40E75C8222255bc855a974568Dd4',
+    // Infinity (V4 singleton) — BSC mainnet only
+    // Source: https://github.com/pancakeswap/infinity-periphery/blob/main/deployments/bsc.json
+    infinityVaultAddress: '0x238a358808379702088667322f80aC48bAd5e6c4',
+    infinityClPoolManagerAddress: '0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b',
+    infinityClPositionManagerAddress: '0x55f4c8abA71A1e923edC303eb4fEfF14608cC226',
+    infinityClQuoterAddress: '0xd0737C9762912dD34c3271197E362Aa736Df0926',
+    infinityPermit2Address: '0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768',
   },
 };
 
@@ -118,6 +153,16 @@ export function getPancakeswapV2FactoryAddress(network: string): Address {
 
   if (!address) {
     throw new Error(`Pancakeswap V2 Factory address not configured for network: ${network}`);
+  }
+
+  return address;
+}
+
+export function getPancakeswapV3MasterchefAddress(network: string): string {
+  const address = contractAddresses[network]?.pancakeswapV3MasterchefAddress;
+
+  if (!address) {
+    throw new Error(`Pancakeswap V3 Masterchef address not configured for network: ${network}`);
   }
 
   return address;
@@ -183,13 +228,57 @@ export function getPancakeswapV3PoolDeployerAddress(network: string): Address {
   return address;
 }
 
+// ─── Infinity (V4 singleton) getters ────────────────────────────────────────
+// These return undefined-safe: callers should check before use on non-BSC networks.
+
+export function getInfinityVaultAddress(network: string): Address {
+  const address = contractAddresses[network]?.infinityVaultAddress;
+  if (!address) throw new Error(`PancakeSwap Infinity Vault not deployed on network: ${network}`);
+  return address;
+}
+
+export function getInfinityClPoolManagerAddress(network: string): Address {
+  const address = contractAddresses[network]?.infinityClPoolManagerAddress;
+  if (!address) throw new Error(`PancakeSwap Infinity CL PoolManager not deployed on network: ${network}`);
+  return address;
+}
+
+export function getInfinityClPositionManagerAddress(network: string): Address {
+  const address = contractAddresses[network]?.infinityClPositionManagerAddress;
+  if (!address) throw new Error(`PancakeSwap Infinity CL PositionManager not deployed on network: ${network}`);
+  return address;
+}
+
+export function getInfinityClQuoterAddress(network: string): Address {
+  const address = contractAddresses[network]?.infinityClQuoterAddress;
+  if (!address) throw new Error(`PancakeSwap Infinity CL Quoter not deployed on network: ${network}`);
+  return address;
+}
+
+export function getInfinityPermit2Address(network: string): Address {
+  const address = contractAddresses[network]?.infinityPermit2Address;
+  if (!address) throw new Error(`PancakeSwap Infinity Permit2 not configured for network: ${network}`);
+  return address;
+}
+
+/** Returns true if this network has Infinity contracts deployed */
+export function supportsInfinity(network: string): boolean {
+  return !!contractAddresses[network]?.infinityClPoolManagerAddress;
+}
+
 /**
- * Returns the appropriate spender address based on the connector name
+ * Returns the appropriate spender address based on the connector name.
+ * For Infinity routes, the spender is Permit2 (not the PositionManager directly).
  * @param network The network name (e.g. 'mainnet', 'base')
- * @param connectorName The connector name (pancakeswap/clmm, pancakeswap/amm, pancakeswap/router, pancakeswap)
+ * @param connectorName The connector name (pancakeswap/clmm, pancakeswap/amm, pancakeswap/router, pancakeswap/infinity, pancakeswap)
  * @returns The address of the contract that should be approved to spend tokens
  */
 export function getSpender(network: string, connectorName: string): string {
+  // Infinity routes: approvals go through Permit2
+  if (connectorName.includes('/infinity')) {
+    return getInfinityPermit2Address(network);
+  }
+
   // Check for AMM (V2) connector pattern
   if (connectorName.includes('/amm')) {
     return getPancakeswapV2RouterAddress(network);
