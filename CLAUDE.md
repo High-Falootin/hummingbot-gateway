@@ -1,5 +1,11 @@
 # AI Agent Instructions
 
+> **Sync note**: This file and [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
+> share the same AI-agent guidance. When updating either file, keep both in sync.
+> `CLAUDE.md` is the canonical source for build/command references.
+> `.github/copilot-instructions.md` adds IDE-specific lens instructions (Hummingbot, Blockchain,
+> PancakeSwap Infinity, Uniswap, Python, Jest+QA, Security).
+
 This file provides guidance to AI coding assistants when working with code in this repository.
 
 ## Build & Command Reference
@@ -276,4 +282,31 @@ node scripts/test-helius-live.js
 
 ## Hummingbot Gateway Endpoint Standardization
 - This repo standardized DEX and chain endpoints that are used by Hummingbot strategies. See this branch for the matching code, especially the Gateway connector classes https://github.com/hummingbot/hummingbot/tree/development
+
+## AI Agent Lenses
+
+Full lens instructions live in [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+Apply all relevant lenses simultaneously when reviewing or modifying code.
+
+### Quick Lens Summary
+
+| Lens | When to apply |
+|---|---|
+| 🤖 **Hummingbot** | Any endpoint change — check field names, response shapes, HTTP verbs match Hummingbot connector |
+| ⛓️ **Blockchain** | EVM/Solana code — BigNumber, token decimals, gas, slippage, tx confirmation |
+| 🥞 **PancakeSwap Infinity** | Any `/infinity` route — bytes32 PoolId, Permit2, singleton PoolManager, BSC-only guard |
+| 🦄 **Uniswap/DEX Protocol** | Tick math, sqrtPriceX96, liquidity formulas, V3 vs V4 differences |
+| 🐍 **Python/Strategy** | Field naming conventions, Decimal precision, asyncio calling patterns |
+| 🧪 **Jest + QA** | All new features — happy-path, edge cases, schema validation, structural smoke tests |
+| 🔐 **Security** | Error messages, passphrase handling, TypeBox pattern constraints, rate limiting |
+
+### PancakeSwap Infinity Key Facts (feat-pancakeswap-infinity branch)
+
+- Routes: `GET /connectors/pancakeswap/infinity/pool-info`, `POST /open-position`, `POST /add-liquidity`, `POST /remove-liquidity`, `POST /collect-fees`
+- Pool identity: `bytes32` PoolId (64 hex chars) = `keccak256(PoolKey)` — NOT a contract address
+- TypeBox `pattern: '^0x[0-9a-fA-F]{64}$'` gives HTTP 400 if a 40-char V3 address is sent
+- BSC Infinity PoolManager: `0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b`
+- BSC Permit2: `0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768`
+- Fee tiers (ppm): `100`=0.01%, `500`=0.05%, `2500`=0.25%, `3000`=0.3%, `10000`=1%
+- `supportsInfinity(network)` guard: only BSC has Infinity contracts
 

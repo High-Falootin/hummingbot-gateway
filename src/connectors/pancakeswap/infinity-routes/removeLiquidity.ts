@@ -101,6 +101,17 @@ export const removeLiquidityRoutes: FastifyPluginAsync = async (fastify: Fastify
     '/remove-liquidity',
     {
       schema: {
+        summary: 'Remove liquidity from an Infinity CL position',
+        description:
+          'Decreases liquidity on a PancakeSwap Infinity CL position NFT and collects the resulting tokens. ' +
+          'Executes CLPositionManager.multicall([decreaseLiquidity, collect]) in a single transaction.\n\n' +
+          'Use percentageToRemove=100 to fully close the position and withdraw all tokens.\n' +
+          'Use percentageToRemove=50 to halve the position size.\n\n' +
+          'Prerequisites:\n' +
+          '  1. You must own the positionTokenId NFT.\n' +
+          '  2. Network must be BSC (Infinity only deployed on BSC mainnet).\n\n' +
+          'Note: Accrued fees are also collected automatically via the bundled collect() call.',
+        tags: ['/connector/pancakeswap'],
         body: PancakeswapInfinityRemoveLiquidityRequest,
         response: { 200: PancakeswapInfinityRemoveLiquidityResponse },
       },

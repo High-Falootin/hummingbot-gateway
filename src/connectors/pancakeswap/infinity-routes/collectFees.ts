@@ -72,6 +72,17 @@ export const collectFeesRoutes: FastifyPluginAsync = async (fastify: FastifyInst
     '/collect-fees',
     {
       schema: {
+        summary: 'Collect accrued fees from an Infinity CL position',
+        description:
+          'Sweeps all outstanding fee revenue from a PancakeSwap Infinity CL position NFT. ' +
+          'Calls CLPositionManager.collect() with MaxUint128 for both tokens, collecting everything available.\n\n' +
+          'Key points:\n' +
+          '  • Fees accumulate only while the pool price is within the position tick range.\n' +
+          '  • You do NOT need to remove liquidity first — fees can be collected independently.\n' +
+          '  • If fees0Collected = fees1Collected = 0, the position has no accumulated fees.\n' +
+          '  • Network must be BSC (Infinity only deployed on BSC mainnet).\n\n' +
+          'CLPositionManager BSC: 0x55f4c8abA71A1e923edC303eb4fEfF14608cC226',
+        tags: ['/connector/pancakeswap'],
         body: PancakeswapInfinityCollectFeesRequest,
         response: { 200: PancakeswapInfinityCollectFeesResponse },
       },

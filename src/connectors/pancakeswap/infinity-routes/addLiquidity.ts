@@ -93,6 +93,17 @@ export const addLiquidityRoutes: FastifyPluginAsync = async (fastify: FastifyIns
     '/add-liquidity',
     {
       schema: {
+        summary: 'Add liquidity to an Infinity CL position',
+        description:
+          'Increases liquidity on an existing PancakeSwap Infinity CL position NFT. ' +
+          'Calls CLPositionManager.increaseLiquidity() via multicall. ' +
+          '\n\nPrerequisites:\n' +
+          '  1. You must own the positionTokenId NFT.\n' +
+          '  2. Approve both tokens to Permit2 (BSC: 0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768).\n' +
+          '  3. Sign Permit2 permits for PositionManager (BSC: 0x55f4c8abA71A1e923edC303eb4fEfF14608cC226).\n' +
+          '\nFee tiers (ppm): 100=0.01%, 500=0.05%, 2500=0.25%, 3000=0.3%, 10000=1%.\n' +
+          'Amounts below active tick go entirely to token0; above tick go to token1.',
+        tags: ['/connector/pancakeswap'],
         body: PancakeswapInfinityAddLiquidityRequest,
         response: { 200: PancakeswapInfinityLiquidityResponse },
       },

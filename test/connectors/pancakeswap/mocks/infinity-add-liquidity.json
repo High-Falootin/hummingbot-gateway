@@ -1,0 +1,9 @@
+{
+  "signature": "0xdef456abc123def456abc123def456abc123def456abc123def456abc123ef01",
+  "status": 1,
+  "data": {
+    "positionTokenId": "12345",
+    "amount0Added": 50.0,
+    "amount1Added": 0.082
+  }
+}
