@@ -574,12 +574,60 @@ export class Pancakeswap {
   }
 
   /**
+   * Minimal ABI fragment for the MasterChef poolInfo(uint256) view function.
+   * Used to disambiguate pid-0: v3PoolAddressPid() returns 0 for BOTH unregistered pools
+   * AND legitimately registered pid-0 pools. poolInfo(0).v3Pool reveals the truth.
+   */
+  private static readonly POOL_INFO_ABI = [
+    {
+      inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+      name: 'poolInfo',
+      outputs: [
+        { internalType: 'uint256', name: 'allocPoint', type: 'uint256' },
+        { internalType: 'address', name: 'v3Pool', type: 'address' },
+        { internalType: 'address', name: 'token', type: 'address' },
+        { internalType: 'bool', name: 'isRegular', type: 'bool' },
+      ],
+      stateMutability: 'view',
+      type: 'function',
+    },
+  ];
+
+  /**
+   * Returns { pid, registered } for a given V3 pool address.
+   *
+   * v3PoolAddressPid() returns 0 for both unregistered pools AND pid-0 pools.
+   * When pid == 0 we call poolInfo(0).v3Pool to disambiguate:
+   *   – poolInfo(0).v3Pool === poolAddress → legitimately at pid 0, registered = true
+   *   – otherwise → unregistered, registered = false
+   */
+  public async getV3PoolRegistration(poolAddress: string): Promise<{ pid: number; registered: boolean }> {
+    const contract = new Contract(
+      this.masterChef.address,
+      [...PancakeswapV3MasterchefABI, ...Pancakeswap.POOL_INFO_ABI],
+      this.ethereum.provider,
+    );
+    const pid = Number(await contract.v3PoolAddressPid(poolAddress));
+    if (pid > 0) return { pid, registered: true };
+
+    // pid == 0 is ambiguous — verify via poolInfo(0).v3Pool
+    try {
+      const info = await contract.poolInfo(0);
+      const registered = info.v3Pool.toLowerCase() === poolAddress.toLowerCase();
+      return { pid: 0, registered };
+    } catch {
+      // poolInfo call failed (e.g. no pools registered yet) — treat as unregistered
+      return { pid: 0, registered: false };
+    }
+  }
+
+  /**
    * Get the pool ID for a V3 pool address from MasterChef (returns 0 if not registered)
+   * @deprecated Use getV3PoolRegistration() which correctly handles pid-0 pools.
    */
   public async getV3PoolIdFromMasterChef(poolAddress: string): Promise<number> {
-    const contract = new Contract(this.masterChef.address, PancakeswapV3MasterchefABI, this.ethereum.provider);
-    const pid = await contract.v3PoolAddressPid(poolAddress);
-    return Number(pid);
+    const { pid } = await this.getV3PoolRegistration(poolAddress);
+    return pid;
   }
 
   /**
@@ -712,10 +760,10 @@ export class Pancakeswap {
         );
       }
 
-      const poolId = await this.getV3PoolIdFromMasterChef(v3Pool);
-      logger.info(`Pool ID in MasterChef: ${poolId}`);
+      const { pid: poolId, registered } = await this.getV3PoolRegistration(v3Pool);
+      logger.info(`Pool ID in MasterChef: ${poolId}, registered: ${registered}`);
 
-      if (poolId === 0) {
+      if (!registered) {
         throw new Error(
           `Pool for position ${tokenId} is not registered in MasterChef. ` +
             `Only positions in MasterChef-registered pools can be staked.`,
@@ -816,10 +864,12 @@ export class Pancakeswap {
 
       const pool = token0Obj && token1Obj ? await this.getV3Pool(token0Obj, token1Obj, position.fee) : null;
 
+      // Derive wrapped-native symbol from the active network (WBNB on BSC, WETH elsewhere)
+      const wrappedNativeSymbol = this.networkName === 'bsc' ? 'WBNB' : 'WETH';
       const isBaseToken0 =
-        (token0Obj?.symbol !== 'WETH' && token1Obj?.symbol === 'WETH') ||
-        (token0Obj?.symbol !== 'WETH' &&
-          token1Obj?.symbol !== 'WETH' &&
+        (token0Obj?.symbol !== wrappedNativeSymbol && token1Obj?.symbol === wrappedNativeSymbol) ||
+        (token0Obj?.symbol !== wrappedNativeSymbol &&
+          token1Obj?.symbol !== wrappedNativeSymbol &&
           token0Obj?.address.toLowerCase() < token1Obj?.address.toLowerCase());
 
       const baseTokenAddress = isBaseToken0 ? (token0Obj?.address ?? '') : (token1Obj?.address ?? '');
@@ -1009,6 +1059,23 @@ export class Pancakeswap {
     const liq = await pm.getLiquidity(poolId);
     return liq.toString();
   }
+
+  /**
+   * Read tick state for a single tick in an Infinity CL pool.
+   * Used for binCount bin-distribution computation: walk ±binCount tick-boundaries
+   * around the active tick and accumulate liquidityNet to derive per-bin liquidity.
+   */
+  public async getInfinityPoolTick(
+    poolId: string,
+    tick: number,
+  ): Promise<{ liquidityGross: string; liquidityNet: string }> {
+    const pm = this.getInfinityClPoolManager();
+    const info = await pm.ticks(poolId, tick);
+    return {
+      liquidityGross: info.liquidityGross.toString(),
+      liquidityNet: info.liquidityNet.toString(),
+    };
+  }
 }
 
 // ─── Minimal ABIs for Infinity contracts ──────────────────────────────────────
@@ -1032,6 +1099,22 @@ const INFINITY_CL_POOL_MANAGER_ABI = [
     inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
     name: 'getLiquidity',
     outputs: [{ internalType: 'uint128', name: 'liquidity', type: 'uint128' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    // V4-style: ticks are stored inside the PoolManager keyed by (poolId, tick)
+    inputs: [
+      { internalType: 'bytes32', name: 'id', type: 'bytes32' },
+      { internalType: 'int24', name: 'tick', type: 'int24' },
+    ],
+    name: 'ticks',
+    outputs: [
+      { internalType: 'uint128', name: 'liquidityGross', type: 'uint128' },
+      { internalType: 'int128', name: 'liquidityNet', type: 'int128' },
+      { internalType: 'uint256', name: 'feeGrowthOutside0X128', type: 'uint256' },
+      { internalType: 'uint256', name: 'feeGrowthOutside1X128', type: 'uint256' },
+    ],
     stateMutability: 'view',
     type: 'function',
   },

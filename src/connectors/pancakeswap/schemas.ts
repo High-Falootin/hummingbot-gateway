@@ -1,6 +1,28 @@
-import { Type, Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 
 import { getEthereumChainConfig } from '../../chains/ethereum/ethereum.config';
+import {
+  InfinityGetPoolInfoRequest,
+  InfinityGetPoolInfoRequestType,
+  InfinityPoolInfoResponse,
+  InfinityPoolInfoResponseType,
+  InfinityOpenPositionRequest,
+  InfinityOpenPositionRequestType,
+  InfinityPositionResponse,
+  InfinityPositionResponseType,
+  InfinityAddLiquidityRequest,
+  InfinityAddLiquidityRequestType,
+  InfinityLiquidityResponse,
+  InfinityLiquidityResponseType,
+  InfinityRemoveLiquidityRequest,
+  InfinityRemoveLiquidityRequestType,
+  InfinityRemoveLiquidityResponse,
+  InfinityRemoveLiquidityResponseType,
+  InfinityCollectFeesRequest,
+  InfinityCollectFeesRequestType,
+  InfinityCollectFeesResponse,
+  InfinityCollectFeesResponseType,
+} from '../../schemas/infinity-schema';
 
 import { PancakeswapConfig } from './pancakeswap.config';
 
@@ -596,177 +618,75 @@ export const PancakeswapClmmExecuteSwapRequest = Type.Object({
 // INFINITY (V4-style singleton) SCHEMAS
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// DDD: Infinity is a separate bounded context from V3 CLMM.
-//   • Pools are identified by a bytes32 PoolId — NOT a 40-char EVM address.
-//   • PoolId = keccak256(PoolKey{ currency0, currency1, fee, tickSpacing, hooks })
-//   • fee is in ppm: 500=0.05%, 3000=0.3%, 10000=1%.
-//   • TypeBox pattern validation gives HTTP 400 if a V3 address is sent here.
+// Canonical schemas live in src/schemas/infinity-schema.ts (same paradigm as
+// clmm-schema.ts).  Here we provide PancakeSwap-specific type aliases that
+// constrain `network` to the PancakeSwap-supported network enum and apply
+// BSC-appropriate defaults for Swagger docs / Fastify schema registration.
+//
+// Route files in infinity-routes/ import these Pancakeswap* names — no change
+// required in those files.
 // ───────────────────────────────────────────────────────────────────────────────
 
-const InfinityPoolKeyFields = {
-  currency0: Type.String({
-    pattern: '^0x[0-9a-fA-F]{40}$',
-    description: 'Address of token0 (sorted — lower address first)',
-    examples: ['0x55d398326f99059fF775485246999027B3197955'],
+// Pool-info: extend the generic request with PancakeSwap network defaults
+export const PancakeswapInfinityGetPoolInfoRequest = Type.Composite([
+  InfinityGetPoolInfoRequest,
+  Type.Object({
+    network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
   }),
-  currency1: Type.String({
-    pattern: '^0x[0-9a-fA-F]{40}$',
-    description: 'Address of token1',
-    examples: ['0xDf24f8c21Cb404B3031a450D8e049D6E39FC1fA5'],
+]);
+export type PancakeswapInfinityGetPoolInfoRequestType = InfinityGetPoolInfoRequestType;
+
+export const PancakeswapInfinityPoolInfoResponse = InfinityPoolInfoResponse;
+export type PancakeswapInfinityPoolInfoResponseType = InfinityPoolInfoResponseType;
+
+// Open position: PancakeSwap-specific network enum + wallet default
+export const PancakeswapInfinityOpenPositionRequest = Type.Composite([
+  InfinityOpenPositionRequest,
+  Type.Object({
+    network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
+    walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
   }),
-  fee: Type.Number({
-    description: 'Pool fee in ppm. Standard: 100=0.01%, 500=0.05%, 2500=0.25%, 3000=0.3%, 10000=1%',
-    examples: [100],
+]);
+export type PancakeswapInfinityOpenPositionRequestType = InfinityOpenPositionRequestType;
+
+export const PancakeswapInfinityPositionResponse = InfinityPositionResponse;
+export type PancakeswapInfinityPositionResponseType = InfinityPositionResponseType;
+
+// Add liquidity
+export const PancakeswapInfinityAddLiquidityRequest = Type.Composite([
+  InfinityAddLiquidityRequest,
+  Type.Object({
+    network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
+    walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
   }),
-  tickSpacing: Type.Number({
-    minimum: 1,
-    description: 'Tick spacing matching the fee tier (1 for 0.01%, 10 for 0.05%, 60 for 0.3%, 200 for 1%)',
-    examples: [1],
+]);
+export type PancakeswapInfinityAddLiquidityRequestType = InfinityAddLiquidityRequestType;
+
+export const PancakeswapInfinityLiquidityResponse = InfinityLiquidityResponse;
+export type PancakeswapInfinityLiquidityResponseType = InfinityLiquidityResponseType;
+
+// Remove liquidity
+export const PancakeswapInfinityRemoveLiquidityRequest = Type.Composite([
+  InfinityRemoveLiquidityRequest,
+  Type.Object({
+    network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
+    walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
   }),
-  hooks: Type.Optional(
-    Type.String({
-      pattern: '^0x[0-9a-fA-F]{40}$',
-      description: 'Hooks contract address (zero address for standard pools)',
-      default: '0x0000000000000000000000000000000000000000',
-    }),
-  ),
-};
+]);
+export type PancakeswapInfinityRemoveLiquidityRequestType = InfinityRemoveLiquidityRequestType;
 
-export const PancakeswapInfinityGetPoolInfoRequest = Type.Object({
-  chainNetwork: Type.Optional(Type.String({ examples: ['ethereum-bsc'] })),
-  network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
-  poolId: Type.String({
-    pattern: '^0x[0-9a-fA-F]{64}$',
-    description: 'Infinity CL pool identifier (bytes32, 64 hex chars). keccak256(PoolKey).',
-    examples: ['0x673dbd89b4de73f139ccca01f515536d386bc993c35efb3abf0a4d4b02b6dd20'],
+export const PancakeswapInfinityRemoveLiquidityResponse = InfinityRemoveLiquidityResponse;
+export type PancakeswapInfinityRemoveLiquidityResponseType = InfinityRemoveLiquidityResponseType;
+
+// Collect fees
+export const PancakeswapInfinityCollectFeesRequest = Type.Composite([
+  InfinityCollectFeesRequest,
+  Type.Object({
+    network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
+    walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
   }),
-  ...InfinityPoolKeyFields,
-});
-export type PancakeswapInfinityGetPoolInfoRequestType = Static<typeof PancakeswapInfinityGetPoolInfoRequest>;
+]);
+export type PancakeswapInfinityCollectFeesRequestType = InfinityCollectFeesRequestType;
 
-export const PancakeswapInfinityPoolInfoResponse = Type.Object({
-  poolId: Type.String(),
-  currency0: Type.String(),
-  currency1: Type.String(),
-  currency0Symbol: Type.String(),
-  currency1Symbol: Type.String(),
-  fee: Type.Number(),
-  feePct: Type.Number(),
-  tickSpacing: Type.Number(),
-  hooks: Type.String(),
-  sqrtPriceX96: Type.String(),
-  tick: Type.Number(),
-  protocolFee: Type.Number(),
-  lpFee: Type.Number(),
-  liquidity: Type.String(),
-  price: Type.Number(),
-  poolKeyEncoded: Type.String(),
-});
-export type PancakeswapInfinityPoolInfoResponseType = Static<typeof PancakeswapInfinityPoolInfoResponse>;
-
-export const PancakeswapInfinityOpenPositionRequest = Type.Object({
-  network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
-  walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
-  ...InfinityPoolKeyFields,
-  lowerPrice: Type.Number({ description: 'Lower price bound (human-readable, e.g. 7.5 BILL per USDT)' }),
-  upperPrice: Type.Number({ description: 'Upper price bound (human-readable). Must be > lowerPrice.' }),
-  amount0Desired: Type.Number({
-    minimum: 0,
-    description: 'Desired amount of token0 in human units. At least one of amount0/amount1 must be > 0.',
-  }),
-  amount1Desired: Type.Number({
-    minimum: 0,
-    description: 'Desired amount of token1 in human units. At least one of amount0/amount1 must be > 0.',
-  }),
-  slippagePct: Type.Optional(Type.Number({ minimum: 0, maximum: 100, default: 0.5 })),
-});
-export type PancakeswapInfinityOpenPositionRequestType = Static<typeof PancakeswapInfinityOpenPositionRequest>;
-
-export const PancakeswapInfinityPositionResponse = Type.Object({
-  signature: Type.String(),
-  status: Type.Number(),
-  data: Type.Optional(
-    Type.Object({
-      positionTokenId: Type.String(),
-      poolId: Type.String(),
-      currency0: Type.String(),
-      currency1: Type.String(),
-      tickLower: Type.Number(),
-      tickUpper: Type.Number(),
-      fee: Type.Number(),
-      feePct: Type.Number(),
-      amount0Desired: Type.Number(),
-      amount1Desired: Type.Number(),
-    }),
-  ),
-});
-export type PancakeswapInfinityPositionResponseType = Static<typeof PancakeswapInfinityPositionResponse>;
-
-export const PancakeswapInfinityAddLiquidityRequest = Type.Object({
-  network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
-  walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
-  positionTokenId: Type.String({ description: 'NFT token ID of the Infinity position' }),
-  amount0Desired: Type.Number(),
-  amount1Desired: Type.Number(),
-  slippagePct: Type.Optional(Type.Number({ minimum: 0, maximum: 100, default: 0.5 })),
-});
-export type PancakeswapInfinityAddLiquidityRequestType = Static<typeof PancakeswapInfinityAddLiquidityRequest>;
-
-export const PancakeswapInfinityLiquidityResponse = Type.Object({
-  signature: Type.String(),
-  status: Type.Number(),
-  data: Type.Optional(
-    Type.Object({
-      positionTokenId: Type.String(),
-      amount0Added: Type.Number(),
-      amount1Added: Type.Number(),
-    }),
-  ),
-});
-export type PancakeswapInfinityLiquidityResponseType = Static<typeof PancakeswapInfinityLiquidityResponse>;
-
-export const PancakeswapInfinityRemoveLiquidityRequest = Type.Object({
-  network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
-  walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
-  positionTokenId: Type.String({ description: 'NFT token ID of the Infinity position' }),
-  percentageToRemove: Type.Number({
-    minimum: 0.01,
-    maximum: 100,
-    description: 'Percentage of liquidity to remove (0.01–100). Use 100 to fully close the position.',
-  }),
-  slippagePct: Type.Optional(Type.Number({ minimum: 0, maximum: 100, default: 0.5 })),
-});
-export type PancakeswapInfinityRemoveLiquidityRequestType = Static<typeof PancakeswapInfinityRemoveLiquidityRequest>;
-
-export const PancakeswapInfinityRemoveLiquidityResponse = Type.Object({
-  signature: Type.String(),
-  status: Type.Number(),
-  data: Type.Optional(
-    Type.Object({
-      positionTokenId: Type.String(),
-      amount0Removed: Type.Number(),
-      amount1Removed: Type.Number(),
-    }),
-  ),
-});
-export type PancakeswapInfinityRemoveLiquidityResponseType = Static<typeof PancakeswapInfinityRemoveLiquidityResponse>;
-
-export const PancakeswapInfinityCollectFeesRequest = Type.Object({
-  network: Type.Optional(Type.String({ default: 'bsc', enum: [...PancakeswapConfig.networks] })),
-  walletAddress: Type.Optional(Type.String({ default: ethereumChainConfig.defaultWallet })),
-  positionTokenId: Type.String({ description: 'NFT token ID of the Infinity position' }),
-});
-export type PancakeswapInfinityCollectFeesRequestType = Static<typeof PancakeswapInfinityCollectFeesRequest>;
-
-export const PancakeswapInfinityCollectFeesResponse = Type.Object({
-  signature: Type.String(),
-  status: Type.Number(),
-  data: Type.Optional(
-    Type.Object({
-      positionTokenId: Type.String(),
-      fees0Collected: Type.Number(),
-      fees1Collected: Type.Number(),
-    }),
-  ),
-});
-export type PancakeswapInfinityCollectFeesResponseType = Static<typeof PancakeswapInfinityCollectFeesResponse>;
+export const PancakeswapInfinityCollectFeesResponse = InfinityCollectFeesResponse;
+export type PancakeswapInfinityCollectFeesResponseType = InfinityCollectFeesResponseType;

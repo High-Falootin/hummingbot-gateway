@@ -17,6 +17,7 @@ Solana) and protocols (Uniswap V2/V3, PancakeSwap V2/V3/Infinity, Raydium, Meteo
 
 **Active branch**: `feat-pancakeswap-infinity`
 **Key work in this branch**: PancakeSwap Infinity (V4-style singleton) CLMM routes
+**Companion PR**: [#642](https://github.com/hummingbot/gateway/pull/642) (`fix/clmm-quote-price-and-pool-info`) — adds `binCount`/`bins[]` to CLMM pool-info (Orca, Uniswap, Raydium), fixes BUY-side price inversion (Orca/Meteora), extends Ethereum tx receipt polling. Infinity must follow the same patterns.
 
 ---
 
@@ -94,6 +95,14 @@ PancakeSwap Infinity is a **V4-style singleton architecture**. Key differences f
 **DDD boundary rule**: Infinity routes live under `/connectors/pancakeswap/infinity` — NEVER under `/clmm`. TypeBox `pattern: '^0x[0-9a-fA-F]{64}$'` enforces PoolId format at schema level (HTTP 400 on wrong input).
 
 **`supportsInfinity(network)`** guard: Infinity contracts only exist on BSC. Any call on mainnet/Polygon/Arbitrum must throw before touching any contract.
+
+**`binCount` / `bins[]`** (PR #642 pattern): optional `binCount` (0–401, default 0) on `pool-info` requests → optional `bins[]` response array. Infinity uses `PoolManager.ticks(poolId, tick)` instead of `pool.ticks(tick)` — same V3 sqrt-price math otherwise. `BinLiquiditySchema` imported from `clmm-schema.ts`.
+
+**BUY-side price convention** (PR #642): `price` in all pool-info and quote-swap responses is always `token1/token0` (quote per base) regardless of side. BUY callers used to see an inverted price — that is fixed in Orca/Meteora; Infinity must follow the same convention.
+
+**Canonical Infinity schemas** live in `src/schemas/infinity-schema.ts` (same paradigm as `clmm-schema.ts`). `pancakeswap/schemas.ts` imports from there and adds PancakeSwap-specific network enum defaults.
+
+**Extended tx receipt polling** (PR #642): `Ethereum.handleTransactionExecution` now polls `getTransactionReceipt` every 5 s for an additional 90 s after the initial timeout. Infinity transactions (complex multicall, gasLimit ≥800 000) benefit from this. `routes/approve.ts` handles null receipt without crashing.
 
 ---
 
@@ -199,7 +208,7 @@ GATEWAY_TEST_MODE=dev jest --runInBand test/connectors/pancakeswap/infinity.test
 ## Key Architectural Invariants
 
 1. **Singleton pattern**: `Pancakeswap.getInstance(network)` — one instance per network
-2. **TypeBox everywhere**: all request/response types defined in `schemas.ts` alongside the connector
+2. **TypeBox everywhere**: canonical schemas in `src/schemas/` (`clmm-schema.ts`, `infinity-schema.ts`, etc.); connector `schemas.ts` imports and re-exports with protocol-specific defaults
 3. **DDD route boundaries**: Router ≠ AMM ≠ CLMM ≠ Infinity — separate folders, never shared
 4. **Infinity ≠ CLMM**: Infinity uses bytes32 PoolIds; V3 uses contract addresses. TypeBox pattern catches confusion at API level.
 5. **`supportsInfinity(network)`**: guard must be checked before any Infinity contract call

@@ -91,7 +91,8 @@ This file provides guidance to AI coding assistants when working with code in th
     - `chain-schema.ts`: Chain operation schemas
     - `router-schema.ts`: Router/aggregator schemas
     - `amm-schema.ts`: AMM operation schemas
-    - `clmm-schema.ts`: CLMM operation schemas
+    - `clmm-schema.ts`: CLMM operation schemas (incl. `BinLiquiditySchema`, `binCount` in `GetPoolInfoRequest`)
+    - `infinity-schema.ts`: Infinity (V4-style singleton) operation schemas — same paradigm as clmm-schema.ts
   - `config/`: Configuration-related routes and utils
     - `routes/`: Config API endpoints
   - `wallet/`: Wallet management routes
@@ -309,4 +310,8 @@ Apply all relevant lenses simultaneously when reviewing or modifying code.
 - BSC Permit2: `0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768`
 - Fee tiers (ppm): `100`=0.01%, `500`=0.05%, `2500`=0.25%, `3000`=0.3%, `10000`=1%
 - `supportsInfinity(network)` guard: only BSC has Infinity contracts
+- **`binCount` / `bins[]`** (PR #642 pattern): optional `binCount` (0–401, default 0) on `pool-info` requests → optional `bins[]` response array. Infinity uses `PoolManager.ticks(poolId, tick)` instead of `pool.ticks(tick)` — same V3 sqrt-price math otherwise. `BinLiquiditySchema` imported from `clmm-schema.ts`.
+- **BUY-side price convention** (PR #642): `price` in all pool-info and quote-swap responses is always `token1/token0` (quote per base) regardless of side. BUY callers used to see an inverted price — that is fixed in Orca/Meteora; Infinity must follow the same convention.
+- **Canonical Infinity schemas** live in `src/schemas/infinity-schema.ts` (same paradigm as `clmm-schema.ts`). `pancakeswap/schemas.ts` imports from there and adds PancakeSwap-specific network enum defaults.
+- **Extended tx receipt polling** (PR #642): `Ethereum.handleTransactionExecution` now polls `getTransactionReceipt` every 5 s for an additional 90 s after the initial timeout. Infinity transactions (complex multicall, gasLimit ≥800 000) benefit from this. `routes/approve.ts` handles null receipt without crashing.
 

@@ -758,8 +758,10 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
     });
 
     test('schemas.ts PoolId pattern enforces bytes32 (64 hex chars)', () => {
-      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
-      const content = fs.readFileSync(schemasFile, 'utf8');
+      // After refactor, canonical schemas live in src/schemas/infinity-schema.ts;
+      // pancakeswap/schemas.ts imports from there.
+      const infinitySchemaFile = path.join(__dirname, '../../../src/schemas/infinity-schema.ts');
+      const content = fs.readFileSync(infinitySchemaFile, 'utf8');
       expect(content).toContain("'^0x[0-9a-fA-F]{64}$'");
     });
   });
@@ -826,8 +828,9 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
 
     // 🔐 Security lens: address pattern constraints in schemas
     test('schemas.ts enforces ^0x[0-9a-fA-F]{40}$ pattern on currency0/currency1 (Security lens)', () => {
-      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
-      const content = fs.readFileSync(schemasFile, 'utf8');
+      // Patterns live in src/schemas/infinity-schema.ts after refactor
+      const infinitySchemaFile = path.join(__dirname, '../../../src/schemas/infinity-schema.ts');
+      const content = fs.readFileSync(infinitySchemaFile, 'utf8');
       // Pattern must appear for both currency0 and currency1
       const matches = (content.match(/\^0x\[0-9a-fA-F\]\{40\}\$/g) || []).length;
       expect(matches).toBeGreaterThanOrEqual(3); // currency0, currency1, hooks
@@ -835,8 +838,9 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
 
     // 🧪 tickSpacing is required (no Optional wrapper) — DDD lens
     test('schemas.ts tickSpacing is required (not Type.Optional) in InfinityPoolKeyFields', () => {
-      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
-      const content = fs.readFileSync(schemasFile, 'utf8');
+      // Canonical definition lives in src/schemas/infinity-schema.ts after refactor
+      const infinitySchemaFile = path.join(__dirname, '../../../src/schemas/infinity-schema.ts');
+      const content = fs.readFileSync(infinitySchemaFile, 'utf8');
       expect(content).not.toContain('tickSpacing: Type.Optional(Type.Number');
       expect(content).toContain('tickSpacing: Type.Number(');
     });
@@ -851,8 +855,9 @@ describe('PancakeSwap Infinity CLMM Tests — USDT/BILL 0.01% on BSC', () => {
 
     // 🦄 DEX Protocol lens: percentageToRemove minimum enforces > 0 at schema level
     test('schemas.ts percentageToRemove uses minimum: 0.01 (matches runtime lte(0) guard)', () => {
-      const schemasFile = path.join(__dirname, '../../../src/connectors/pancakeswap/schemas.ts');
-      const content = fs.readFileSync(schemasFile, 'utf8');
+      // Canonical definition lives in src/schemas/infinity-schema.ts after refactor
+      const infinitySchemaFile = path.join(__dirname, '../../../src/schemas/infinity-schema.ts');
+      const content = fs.readFileSync(infinitySchemaFile, 'utf8');
       expect(content).toContain('minimum: 0.01');
     });
   });

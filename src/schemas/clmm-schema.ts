@@ -1,6 +1,6 @@
 import { Type, Static } from '@sinclair/typebox';
 
-import { TransactionStatus } from './chain-schema';
+// TransactionStatus intentionally not imported — status fields use Type.Number()
 
 export const FetchPoolsRequest = Type.Object(
   {
@@ -95,6 +95,10 @@ export const PoolInfoSchema = Type.Object(
     baseTokenAmount: Type.Number(),
     quoteTokenAmount: Type.Number(),
     activeBinId: Type.Number(),
+    // Optional bin-liquidity distribution — present only when binCount > 0 is requested.
+    // Mirrors Meteora's bins[] shape. Bins above active tick have quoteTokenAmount=0;
+    // bins below have baseTokenAmount=0. See PR #642 for the established pattern.
+    bins: Type.Optional(Type.Array(BinLiquiditySchema)),
   },
   { $id: 'PoolInfo' },
 );
@@ -119,6 +123,16 @@ export const GetPoolInfoRequest = Type.Object(
   {
     network: Type.Optional(Type.String()),
     poolAddress: Type.String(),
+    // Number of tick-spacing-wide bins centred on the active tick to include in response.
+    // 0 (default) → no bins[] field, no extra RPC cost. Max 401. See PR #642.
+    binCount: Type.Optional(
+      Type.Number({
+        minimum: 0,
+        maximum: 401,
+        default: 0,
+        description: 'Number of tick-spacing-wide bins centred on the active tick to return (0 = disabled). Max 401.',
+      }),
+    ),
   },
   { $id: 'GetPoolInfoRequest' },
 );
